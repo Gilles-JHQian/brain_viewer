@@ -1,0 +1,1435 @@
+#!/usr/bin/env python3
+"""
+Brain Viewer Data Preparation Script
+
+Generates JSON data files from HGA analysis results for the interactive
+brain viewer. Run this on the HPC cluster, then download the output
+directory to your local machine.
+
+Usage:
+    conda activate Lexical_NoDelay
+    python prepare_data.py [--output-dir OUTPUT_DIR]
+
+Author: Assistant
+Date: 2026-03-04
+"""
+
+import os
+import sys
+import json
+import math
+import argparse
+import warnings
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Optional, Tuple
+
+from mne.surface import read_surface
+from nibabel.freesurfer import read_annot
+import mne
+import h5py
+import re
+from mne_bids import BIDSPath
+from tqdm import tqdm
+
+warnings.filterwarnings("ignore")
+
+# =============================================================================
+# Configuration
+# =============================================================================
+BIDS_ROOT = "/hpc/home/jq81/work/cogan_lab_box/CoganLab/BIDS-1.0_LexicalDecRepNoDelay/BIDS"
+SUBJECTS_DIR = os.environ.get(
+    "SUBJECTS_DIR",
+    "/hpc/home/jq81/cogan_lab/jq81/freesurfer/subjects"
+)
+# Individual-subject FreeSurfer reconstructions (for talairach transforms)
+RECON_DIR = os.environ.get(
+    "RECON_DIR",
+    "/hpc/home/jq81/work/cogan_lab_box/ECoG_Recon"
+)
+A2009S_CSV = os.path.join(BIDS_ROOT, "code", "a2009s.csv")
+FS_COLOR_LUT = os.path.join(BIDS_ROOT, "code", "FreeSurferColorLUT.txt")
+
+# Data parameters
+TASK = "LexicalNoDelay"
+BAND = "highgamma"
+REFERENCE = "car"
+PHASES = ["Cue", "Stimulus", "Response"]
+CONDITIONS = ["Decision", "Passive", "Repeat"]
+DIFF_TYPES = {
+    "condition": {
+        "directions": ["DecRep", "RepDec"],
+        "needs_condition": False,
+        "condition_map": {
+            "DecRep": ("Decision", "Repeat"),
+            "RepDec": ("Repeat", "Decision"),
+        },
+    },
+    "lexicality": {
+        "directions": ["NwWd", "WdNw"],
+        "needs_condition": True,
+        "stim_type_map": {
+            "NwWd": ("Nonword", "Word"),
+            "WdNw": ("Word", "Nonword"),
+        },
+        # Used for statistics file lookup (backend still calls it stimType)
+        "stats_rec_type": "stimType",
+    },
+    "neighborhood": {
+        "directions": ["HdLd", "LdHd"],
+        "needs_condition": True,
+        "stats_rec_type": "neighborhood",
+        "neighborhood_map": {
+            "HdLd": ("High", "Low"),
+            "LdHd": ("Low", "High"),
+        },
+    },
+}
+
+# Epoch derivatives root
+DERIVATIVES_ROOT = os.path.join(BIDS_ROOT, f"derivatives/epoch({REFERENCE})")
+STATISTICS_ROOT = os.path.join(BIDS_ROOT, "derivatives/statistics")
+STIM_PROPERTIES_PATH = os.path.join(os.path.dirname(__file__), 'stim_properties.json')
+
+# Mesh decimation target (vertices per hemisphere)
+MESH_DECIMATE_TARGET = 50000
+
+
+# =============================================================================
+# JSON encoder for numpy types
+# =============================================================================
+def _sanitize_value(v):
+    """Replace NaN/Inf floats with None recursively."""
+    if isinstance(v, float):
+        if math.isnan(v) or math.isinf(v):
+            return None
+        return v
+    elif isinstance(v, list):
+        return [_sanitize_value(x) for x in v]
+    elif isinstance(v, dict):
+        return {k: _sanitize_value(val) for k, val in v.items()}
+    return v
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """JSON encoder that handles numpy types, sanitising NaN/Inf → null."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            v = float(obj)
+            if math.isnan(v) or math.isinf(v):
+                return None
+            return round(v, 6)
+        elif isinstance(obj, np.ndarray):
+            return _sanitize_value(obj.tolist())
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        return super().default(obj)
+
+
+def save_json(data: dict, filepath: str, compact: bool = True):
+    """Save data as JSON file."""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with open(filepath, 'w') as f:
+        if compact:
+            json.dump(data, f, cls=NumpyEncoder, separators=(',', ':'))
+        else:
+            json.dump(data, f, cls=NumpyEncoder, indent=2)
+    size_mb = os.path.getsize(filepath) / (1024 * 1024)
+    print(f"  Saved: {filepath} ({size_mb:.2f} MB)")
+
+
+# =============================================================================
+# 1. Brain mesh extraction
+# =============================================================================
+def prepare_brain_mesh(output_dir: str):
+    """
+    Extract fsaverage pial surface mesh and export as JSON.
+    
+    Reads lh.pial and rh.pial from FreeSurfer fsaverage,
+    decimates to reduce size, maps annotation colors to decimated
+    vertices via nearest-neighbour, and saves as JSON with vertices (mm),
+    face indices, and per-vertex ROI colors.
+    """
+    print("\n=== Preparing brain mesh ===")
+    
+    from scipy.spatial import cKDTree
+    
+    mesh_data = {}
+    
+    for hemi in ["lh", "rh"]:
+        surf_path = os.path.join(SUBJECTS_DIR, "fsaverage", "surf", f"{hemi}.pial")
+        annot_path = os.path.join(
+            SUBJECTS_DIR, "fsaverage", "label", f"{hemi}.aparc.a2009s.annot"
+        )
+        print(f"  Loading {surf_path}")
+        
+        # read_surface returns vertices in surface RAS (mm) and face indices
+        verts, faces = read_surface(surf_path)
+        
+        print(f"  Original: {verts.shape[0]} vertices, {faces.shape[0]} faces")
+        
+        # Load annotation for original mesh
+        labels_orig, ctab_orig, names_orig = read_annot(annot_path)
+        # names_orig is list of bytes; decode
+        names_orig = [n.decode() if isinstance(n, bytes) else n for n in names_orig]
+        
+        # Decimate if needed
+        if verts.shape[0] > MESH_DECIMATE_TARGET:
+            verts_dec, faces_dec = _decimate_mesh(verts, faces, MESH_DECIMATE_TARGET)
+            print(f"  Decimated: {verts_dec.shape[0]} vertices, {faces_dec.shape[0]} faces")
+            
+            # Map annotation labels to decimated vertices via nearest neighbour
+            print("  Mapping annotation labels to decimated mesh...")
+            tree = cKDTree(verts)
+            _, nearest_idx = tree.query(verts_dec)
+            labels_dec = labels_orig[nearest_idx]
+        else:
+            verts_dec, faces_dec = verts, faces
+            labels_dec = labels_orig
+        
+        # Round to reduce JSON size (0.1mm precision is plenty)
+        verts_dec = np.round(verts_dec, 1)
+        
+        # Build per-vertex RGB colors from annotation
+        # ctab columns: R, G, B, A, label_id
+        vertex_colors = np.full((verts_dec.shape[0], 3), 232, dtype=np.uint8)  # default gray
+        for label_idx in range(len(names_orig)):
+            mask = labels_dec == label_idx
+            if np.any(mask) and names_orig[label_idx] != "Unknown":
+                r, g, b = int(ctab_orig[label_idx, 0]), int(ctab_orig[label_idx, 1]), int(ctab_orig[label_idx, 2])
+                vertex_colors[mask] = [r, g, b]
+        
+        n_colored = int(np.sum(labels_dec > 0))
+        print(f"  Colored {n_colored}/{verts_dec.shape[0]} vertices with annotation labels")
+        
+        mesh_data[hemi] = {
+            "vertices": verts_dec.tolist(),
+            "faces": faces_dec.tolist(),
+            "vertex_colors": vertex_colors.tolist(),
+            "n_vertices": int(verts_dec.shape[0]),
+            "n_faces": int(faces_dec.shape[0]),
+        }
+    
+    save_json(mesh_data, os.path.join(output_dir, "brain_mesh.json"))
+
+
+def _decimate_mesh(verts: np.ndarray, faces: np.ndarray, target: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Decimate a mesh to approximately `target` vertices using PyVista.
+    """
+    try:
+        import pyvista as pv
+        
+        # Build PyVista mesh
+        # faces need to be in VTK format: [n_verts, v0, v1, v2, ...]
+        n_faces = faces.shape[0]
+        vtk_faces = np.column_stack([
+            np.full(n_faces, 3, dtype=np.int64),
+            faces
+        ]).ravel()
+        
+        mesh = pv.PolyData(verts, vtk_faces)
+        
+        # Compute decimation ratio
+        ratio = 1.0 - (target / verts.shape[0])
+        ratio = max(0.0, min(ratio, 0.95))
+        
+        # Decimate
+        decimated = mesh.decimate(ratio)
+        
+        # Extract vertices and faces
+        new_verts = np.array(decimated.points)
+        new_faces = decimated.faces.reshape(-1, 4)[:, 1:]  # Remove the '3' prefix
+        
+        return new_verts, new_faces
+        
+    except Exception as e:
+        print(f"  Warning: Decimation failed ({e}), using original mesh")
+        return verts, faces
+
+
+# =============================================================================
+# 2. ROI atlas with annotation-based vertex labels
+# =============================================================================
+def prepare_roi_atlas(output_dir: str):
+    """
+    Extract ROI atlas data including:
+    - Gross label to atlas label mapping (from a2009s.csv)
+    - FreeSurfer color lookup table
+    - Per-vertex annotation labels for brain surface coloring
+    """
+    print("\n=== Preparing ROI atlas ===")
+    
+    # Load gross label to atlas label mapping (skip comment lines)
+    a2009s_df = pd.read_csv(A2009S_CSV, comment='#').dropna(subset=['gross_label', 'atlas_label'])
+    
+    # Build gross_label -> list of atlas_labels mapping
+    gross_to_atlas = {}
+    atlas_to_gross = {}
+    for _, row in a2009s_df.iterrows():
+        gross = row["gross_label"]
+        atlas = row["atlas_label"]
+        if gross not in gross_to_atlas:
+            gross_to_atlas[gross] = []
+        gross_to_atlas[gross].append(atlas)
+        atlas_to_gross[atlas] = gross
+    
+    # Parse FreeSurfer color LUT for ROI colors
+    fs_colors = _parse_freesurfer_lut(FS_COLOR_LUT)
+    
+    # Load annotation files for per-vertex ROI labels
+    annot_data = {}
+    for hemi in ["lh", "rh"]:
+        annot_path = os.path.join(
+            SUBJECTS_DIR, "fsaverage", "label", f"{hemi}.aparc.a2009s.annot"
+        )
+        labels, ctab, names = read_annot(annot_path)
+        
+        # Decode names if bytes
+        names = [n.decode('utf-8') if isinstance(n, bytes) else str(n) for n in names]
+        
+        # Build color table: name -> [R, G, B, A]
+        label_colors = {}
+        for i, name in enumerate(names):
+            full_name = f"ctx_{hemi}_{name}"
+            label_colors[full_name] = ctab[i, :4].tolist()  # R, G, B, A
+        
+        annot_data[hemi] = {
+            "labels": labels.tolist(),  # Per-vertex label index
+            "names": [f"ctx_{hemi}_{n}" for n in names],  # Full atlas label names
+            "colors": label_colors,
+        }
+    
+    # Define colors for gross ROI labels (used for electrode visualization)
+    gross_roi_colors = _define_gross_roi_colors()
+    
+    atlas_data = {
+        "gross_to_atlas": gross_to_atlas,
+        "atlas_to_gross": atlas_to_gross,
+        "gross_roi_colors": gross_roi_colors,
+        "fs_colors": fs_colors,
+        "annotations": annot_data,
+    }
+    
+    save_json(atlas_data, os.path.join(output_dir, "roi_atlas.json"))
+
+
+def _parse_freesurfer_lut(lut_path: str) -> Dict[str, List[int]]:
+    """Parse FreeSurfer color LUT file into {label_name: [R, G, B, A]} dict."""
+    colors = {}
+    with open(lut_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split()
+            if len(parts) >= 5:
+                try:
+                    name = parts[1]
+                    r, g, b, a = int(parts[2]), int(parts[3]), int(parts[4]), int(parts[5]) if len(parts) > 5 else 255
+                    colors[name] = [r, g, b, a]
+                except (ValueError, IndexError):
+                    continue
+    return colors
+
+
+def _define_gross_roi_colors() -> Dict[str, List[int]]:
+    """
+    Define distinct colors for gross ROI labels.
+    These are used for electrode sphere coloring in the 3D viewer.
+    """
+    return {
+        # Temporal
+        "STG": [228, 26, 28],       # Red
+        "MTG": [255, 127, 0],       # Orange
+        "ITG": [255, 191, 0],       # Gold
+        "HG": [227, 66, 52],        # Vermillion
+        "STS": [251, 154, 153],     # Light red
+        "TP": [253, 191, 111],      # Light orange
+        # Frontal
+        "IFG": [55, 126, 184],      # Blue
+        "MFG": [77, 175, 74],       # Green
+        "SFG": [152, 78, 163],      # Purple
+        "PrCG": [166, 206, 227],    # Light blue
+        # Parietal
+        "SMG": [31, 120, 180],      # Dark blue
+        "AG": [106, 61, 154],       # Dark purple
+        "SPG": [202, 178, 214],     # Light purple
+        "PoCG": [178, 223, 138],    # Light green
+        # Central / Other cortical
+        "Insula": [255, 255, 51],   # Yellow
+        "OFC": [177, 89, 40],       # Brown
+        "GRect": [190, 174, 212],   # Lavender
+        "Subcentral": [141, 211, 199],  # Teal
+        "Cingulate": [188, 128, 189],   # Mauve
+        "Precuneus": [204, 235, 197],   # Pale green
+        "Cuneus": [255, 237, 111],      # Pale yellow
+        "Occipital": [190, 186, 218],   # Periwinkle
+        "Lingual": [251, 128, 114],     # Salmon
+        "Fusiform": [128, 177, 211],    # Steel blue
+        "Paracentral": [253, 180, 98],  # Peach
+        "Parahippocampal": [179, 222, 105], # Lime
+        # Non-cortical / special
+        "Unknown": [180, 180, 180],     # Gray
+        "White-Matter": [200, 200, 200],# Light gray
+        "Intersection": [120, 120, 120],# Dark gray
+    }
+
+
+# =============================================================================
+# 3. Electrode metadata extraction
+# =============================================================================
+def prepare_electrodes(output_dir: str):
+    """
+    Extract electrode metadata from all subjects' parcellation CSV files.
+    
+    Exports electrode name, subject, channel, MNI position, fsaverage position,
+    ROI label, hemisphere, and atlas label for each electrode.
+    """
+    print("\n=== Preparing electrode metadata ===")
+    
+    parcellation_root = os.path.join(BIDS_ROOT, "derivatives", "parcellation")
+    
+    # Discover all subjects
+    subjects = sorted([
+        d.replace("sub-", "") 
+        for d in os.listdir(parcellation_root) 
+        if d.startswith("sub-")
+    ])
+    print(f"  Found {len(subjects)} subjects: {subjects}")
+    
+    # Load a2009s mapping for gross label lookup (skip comment lines)
+    a2009s_df = pd.read_csv(A2009S_CSV, comment='#').dropna(subset=['gross_label', 'atlas_label'])
+    atlas_to_gross = {}
+    for _, row in a2009s_df.iterrows():
+        atlas_to_gross[row["atlas_label"]] = row["gross_label"]
+    
+    all_electrodes = []
+    recon_dir = RECON_DIR
+    
+    for subject in tqdm(subjects, desc="Loading electrode metadata"):
+        parc_path = os.path.join(
+            parcellation_root, f"sub-{subject}", REFERENCE,
+            f"sub-{subject}_proc-3mm_aparc2009s.csv"
+        )
+        
+        if not os.path.exists(parc_path):
+            print(f"  Warning: No parcellation file for {subject}")
+            continue
+        
+        parc_df = pd.read_csv(parc_path)
+        
+        for _, row in parc_df.iterrows():
+            ch_name = str(row["name"])  # e.g., "D0024_LOF1"
+            
+            # Parse channel name
+            if "_" in ch_name:
+                ch_subject, ch_channel = ch_name.split("_", 1)
+            else:
+                ch_subject = subject
+                ch_channel = ch_name
+            
+            # MNI coordinates (meters)
+            x_mni = float(row["x"]) if pd.notna(row["x"]) else None
+            y_mni = float(row["y"]) if pd.notna(row["y"]) else None
+            z_mni = float(row["z"]) if pd.notna(row["z"]) else None
+            
+            # ROI and hemisphere (derive from x coordinate)
+            roi = str(row["roi"]) if pd.notna(row.get("roi")) else "Unknown"
+            if x_mni is not None:
+                hemi = "L" if x_mni <= 0 else "R"
+            else:
+                hemi = str(row["hemi"]) if pd.notna(row.get("hemi")) else "Unknown"
+            
+            # Atlas label (center column)
+            atlas_label = str(row["center"]) if pd.notna(row.get("center")) else "Unknown"
+            
+            # Gross label with hemisphere
+            gross_label = atlas_to_gross.get(atlas_label, roi)
+            
+            # fsaverage positions will be computed via talairach transform below
+            electrode = {
+                "name": f"{subject}_{ch_channel}",
+                "subject": subject,
+                "channel": ch_channel,
+                "x_mni": round(x_mni, 8) if x_mni is not None else None,
+                "y_mni": round(y_mni, 8) if y_mni is not None else None,
+                "z_mni": round(z_mni, 8) if z_mni is not None else None,
+                "x_fs": None,
+                "y_fs": None,
+                "z_fs": None,
+                "roi": roi,
+                "hemi": hemi,
+                "atlas_label": atlas_label,
+            }
+            all_electrodes.append(electrode)
+    
+    # Compute fsaverage positions using FreeSurfer talairach transform
+    print("  Computing fsaverage positions via talairach transform...")
+    _compute_and_attach_fsaverage_positions(all_electrodes, recon_dir)
+    n_with_fs = sum(1 for e in all_electrodes if e["x_fs"] is not None)
+    print(f"  Fsaverage positions computed for {n_with_fs}/{len(all_electrodes)} electrodes")
+    
+    # Compute summary statistics
+    subjects_list = sorted(set(e["subject"] for e in all_electrodes))
+    rois_list = sorted(set(e["roi"] for e in all_electrodes))
+    roi_counts = {}
+    for e in all_electrodes:
+        roi_counts[e["roi"]] = roi_counts.get(e["roi"], 0) + 1
+    subject_counts = {}
+    for e in all_electrodes:
+        subject_counts[e["subject"]] = subject_counts.get(e["subject"], 0) + 1
+    
+    electrodes_data = {
+        "electrodes": all_electrodes,
+        "subjects": subjects_list,
+        "rois": rois_list,
+        "roi_counts": roi_counts,
+        "subject_counts": subject_counts,
+        "n_total": len(all_electrodes),
+    }
+    
+    save_json(electrodes_data, os.path.join(output_dir, "electrodes.json"), compact=True)
+    print(f"  Total: {len(all_electrodes)} electrodes from {len(subjects_list)} subjects")
+
+
+def _compute_and_attach_fsaverage_positions(electrodes: List[dict], recon_dir: str):
+    """
+    Compute fsaverage MRI space positions for all electrodes using MNE transforms.
+    
+    For each subject, tries to load the talairach.xfm from the FreeSurfer recon
+    directory (recon_dir/{sub_id}/mri/transforms/talairach.xfm). If the transform
+    is available, applies it to convert subject-native ACPC coordinates to
+    fsaverage surface RAS coordinates.
+    
+    For subjects without FreeSurfer reconstructions, falls back to a naive
+    approximation (ACPC meters * 1000 -> mm), which is reasonable but not exact.
+    
+    Attaches x_fs, y_fs, z_fs (mm) to each electrode dict.
+    """
+    import re
+    from ieeg.viz.mri import force2frame
+    
+    # Group by subject
+    by_subject = {}
+    for i, e in enumerate(electrodes):
+        subj = e["subject"]
+        if subj not in by_subject:
+            by_subject[subj] = []
+        by_subject[subj].append((i, e))
+    
+    n_transformed = 0
+    n_fallback = 0
+    fallback_subjects = []
+    
+    for subject, elec_list in by_subject.items():
+        # Convert subject ID format (D0024 -> D24) for FreeSurfer lookup
+        sub_id = re.sub(r'^D0+', 'D', subject)
+        
+        # Try to load the talairach transform
+        trans = None
+        try:
+            to_fsaverage = mne.read_talxfm(sub_id, recon_dir)
+            trans = mne.transforms.Transform(
+                fro='head', to='mri', trans=to_fsaverage['trans']
+            )
+        except Exception:
+            pass  # Will use fallback below
+        
+        if trans is not None:
+            # --- Proper transform via talairach.xfm ---
+            ch_pos = {}
+            idx_map = {}
+            for idx, elec in elec_list:
+                if elec["x_mni"] is not None:
+                    ch_pos[elec["channel"]] = np.array([
+                        elec["x_mni"], elec["y_mni"], elec["z_mni"]
+                    ])
+                    idx_map[elec["channel"]] = idx
+            
+            if ch_pos:
+                try:
+                    montage = mne.channels.make_dig_montage(
+                        ch_pos=ch_pos, coord_frame='head'
+                    )
+                    force2frame(montage, trans.from_str)
+                    montage.apply_trans(trans)
+                    
+                    transformed_pos = montage.get_positions()['ch_pos']
+                    for ch_name, idx in idx_map.items():
+                        if ch_name in transformed_pos:
+                            pos_mm = transformed_pos[ch_name] * 1000
+                            electrodes[idx]["x_fs"] = round(float(pos_mm[0]), 2)
+                            electrodes[idx]["y_fs"] = round(float(pos_mm[1]), 2)
+                            electrodes[idx]["z_fs"] = round(float(pos_mm[2]), 2)
+                            n_transformed += 1
+                except Exception as e:
+                    warnings.warn(f"Transform failed for {subject}: {e}")
+                    # Fall through to fallback for this subject's electrodes
+                    trans = None  # Force fallback below
+        
+        if trans is None:
+            # --- Fallback: naive ACPC meters -> mm ---
+            # This approximates fsaverage surface RAS when no talairach.xfm
+            # is available. For fsaverage, c_ras=[0,0,0] so MNI mm ≈ surface RAS.
+            fallback_subjects.append(subject)
+            for idx, elec in elec_list:
+                if elec["x_mni"] is not None:
+                    elec["x_fs"] = round(elec["x_mni"] * 1000, 2)
+                    elec["y_fs"] = round(elec["y_mni"] * 1000, 2)
+                    elec["z_fs"] = round(elec["z_mni"] * 1000, 2)
+                    n_fallback += 1
+    
+    print(f"    {n_transformed} electrodes transformed via talairach.xfm")
+    print(f"    {n_fallback} electrodes using ACPC->mm fallback (no recon available)")
+    if fallback_subjects:
+        print(f"    Subjects without talairach.xfm ({len(fallback_subjects)}): {fallback_subjects}")
+
+
+# =============================================================================
+# 4. Epoch loading helpers
+# =============================================================================
+_ERROR_TAGS = {'RESP_ERR', 'LATE_RESP'}
+
+
+def _discover_subjects() -> List[str]:
+    """Discover available subjects in the derivatives directory."""
+    subjects = []
+    if os.path.exists(DERIVATIVES_ROOT):
+        for item in os.listdir(DERIVATIVES_ROOT):
+            if item.startswith('sub-'):
+                subjects.append(item.replace('sub-', ''))
+    return sorted(subjects)
+
+
+def _load_zscore_epoch(subject: str, phase: str, condition: str):
+    """
+    Load a zscore epoch for a single subject/phase/condition.
+    Returns mne.Epochs or None. Filters error trials.
+    """
+    bids_path = BIDSPath(
+        root=DERIVATIVES_ROOT,
+        subject=subject,
+        datatype='epoch(band)(zscore)',
+        task=TASK,
+        processing=phase,
+        description=condition,
+        suffix=BAND,
+        check=False,
+    )
+    matches = bids_path.match()
+    if not matches:
+        return None
+    try:
+        epoch = mne.read_epochs(matches[0].fpath, verbose=False)
+        # Filter error trials
+        if (epoch.metadata is not None
+                and 'resp_annotation' in epoch.metadata.columns):
+            keep = epoch.metadata['resp_annotation'].apply(
+                lambda x: not _ERROR_TAGS.intersection(x)
+                if isinstance(x, (list, tuple, set)) else True
+            )
+            epoch = epoch[keep.values]
+        if len(epoch) == 0:
+            return None
+        return epoch
+    except Exception as e:
+        warnings.warn(f"Could not load zscore epoch {subject}/{phase}/{condition}: {e}")
+        return None
+
+
+def _load_statistics_sig(subject: str, phase: str, condition: Optional[str] = None,
+                         direction: Optional[str] = None,
+                         diff_type: Optional[str] = None) -> Optional[List[str]]:
+    """
+    Load sig_ch_names from a statistics H5 file.
+    Returns a list of significant channel names, or None.
+    """
+    h5_path = _get_statistics_h5_path(subject, phase, condition, direction, diff_type)
+    if h5_path is None or not os.path.exists(h5_path):
+        return None
+    try:
+        with h5py.File(h5_path, 'r') as f:
+            if 'sig_ch_names' in f:
+                return [
+                    n.decode('utf-8') if isinstance(n, bytes) else str(n)
+                    for n in f['sig_ch_names'][:]
+                ]
+    except Exception as e:
+        warnings.warn(f"Could not load statistics from {h5_path}: {e}")
+    return None
+
+
+def _load_statistics_mask(subject: str, phase: str, condition: Optional[str] = None,
+                          direction: Optional[str] = None,
+                          diff_type: Optional[str] = None) -> Optional[Tuple[List[str], np.ndarray]]:
+    """
+    Load mask and ch_names from a statistics H5 file.
+    Returns (ch_names, mask) or None.
+    """
+    h5_path = _get_statistics_h5_path(subject, phase, condition, direction, diff_type)
+    if h5_path is None or not os.path.exists(h5_path):
+        return None
+    try:
+        with h5py.File(h5_path, 'r') as f:
+            ch_names = [
+                n.decode('utf-8') if isinstance(n, bytes) else str(n)
+                for n in f['ch_names'][:]
+            ]
+            mask = f['mask'][:]
+            return ch_names, mask
+    except Exception as e:
+        warnings.warn(f"Could not load statistics mask from {h5_path}: {e}")
+    return None
+
+
+def _get_statistics_h5_path(subject: str, phase: str,
+                            condition: Optional[str] = None,
+                            direction: Optional[str] = None,
+                            diff_type: Optional[str] = None) -> Optional[str]:
+    """Construct the path to a statistics H5 file."""
+    if diff_type is None:
+        # Non-diff: statistics/sub-{subject}/car/...
+        stat_dir = os.path.join(STATISTICS_ROOT, f'sub-{subject}', REFERENCE)
+        filename = f'sub-{subject}_task-{TASK}_proc-{phase}_desc-{condition}_{BAND}.h5'
+    else:
+        stat_dir = os.path.join(STATISTICS_ROOT, f'sub-{subject}', f'{REFERENCE}(diff)')
+        # Map frontend diff_type name to backend recording type
+        rec_type = DIFF_TYPES[diff_type].get('stats_rec_type', diff_type)
+        if diff_type == 'condition':
+            filename = (f'sub-{subject}_task-{TASK}_proc-{phase}'
+                        f'_space-{direction}_rec-condition_{BAND}.h5')
+        else:
+            filename = (f'sub-{subject}_task-{TASK}_proc-{phase}'
+                        f'_space-{direction}_rec-{rec_type}'
+                        f'_desc-{condition}_{BAND}.h5')
+    return os.path.join(stat_dir, filename)
+
+
+def _build_sig_channels(subjects: List[str], all_ch_names: List[str],
+                        phase: str, condition: Optional[str] = None,
+                        direction: Optional[str] = None,
+                        diff_type: Optional[str] = None) -> List[str]:
+    """
+    Build a list of significant channel names by loading statistics
+    for each subject and collecting sig_ch_names.
+    """
+    sig_set = set()
+    seen_subjects = set()
+    for ch in all_ch_names:
+        subj = ch.split('_', 1)[0]
+        if subj in seen_subjects:
+            continue
+        seen_subjects.add(subj)
+        sig_names = _load_statistics_sig(subj, phase, condition, direction, diff_type)
+        if sig_names:
+            sig_set.update(sig_names)
+    return sorted(sig_set)
+
+
+def _build_sig_mask(all_ch_names: List[str], n_times: int,
+                    phase: str, condition: Optional[str] = None,
+                    direction: Optional[str] = None,
+                    diff_type: Optional[str] = None,
+                    times: Optional[np.ndarray] = None) -> Optional[np.ndarray]:
+    """
+    Build a significance mask aligned with all_ch_names.
+    Returns (n_electrodes, n_times) mask, or None if no stats available.
+
+    The statistics mask is computed on a cropped time window
+    (Cue/Stimulus: [0, 0.75], Response: [-0.5, 0.5]).
+    When ``times`` is provided the mask is placed at the correct offset
+    within the full epoch time array.
+    """
+    n_electrodes = len(all_ch_names)
+    combined_mask = np.zeros((n_electrodes, n_times), dtype=np.int64)
+    any_loaded = False
+
+    # Determine the time offset for the statistics window
+    stat_windows = {
+        'Cue':      (0.0, 0.75),
+        'Stimulus': (0.0, 0.75),
+        'Response': (-0.5, 0.5),
+    }
+    offset = 0
+    if times is not None and phase in stat_windows:
+        tmin_stat = stat_windows[phase][0]
+        offset = int(np.searchsorted(times, tmin_stat))
+
+    # Group channels by subject
+    subject_channels = {}
+    for i, ch in enumerate(all_ch_names):
+        subj = ch.split('_', 1)[0]
+        if subj not in subject_channels:
+            subject_channels[subj] = []
+        subject_channels[subj].append((ch, i))
+
+    for subj, ch_list in subject_channels.items():
+        result = _load_statistics_mask(subj, phase, condition, direction, diff_type)
+        if result is None:
+            continue
+        h5_ch_names, h5_mask = result
+        h5_ch_to_idx = {name: idx for idx, name in enumerate(h5_ch_names)}
+
+        for ch_name, global_idx in ch_list:
+            if ch_name in h5_ch_to_idx:
+                h5_idx = h5_ch_to_idx[ch_name]
+                mask_len = h5_mask.shape[1]
+                end = min(offset + mask_len, n_times)
+                n_copy = end - offset
+                combined_mask[global_idx, offset:end] = h5_mask[h5_idx, :n_copy]
+                any_loaded = True
+
+    return combined_mask if any_loaded else None
+
+
+def _load_stim_properties() -> dict:
+    """Load stim_properties.json which maps tokens to lexicality/neighborhood."""
+    with open(STIM_PROPERTIES_PATH, 'r') as f:
+        return json.load(f)
+
+
+def _prefix_ch_names(ch_names: List[str], subject: str) -> List[str]:
+    """Prefix channel names with subject ID if not already prefixed."""
+    out = []
+    for ch in ch_names:
+        if ch.startswith(f"{subject}_"):
+            out.append(ch)
+        else:
+            out.append(f"{subject}_{ch}")
+    return out
+
+
+# =============================================================================
+# 4a. HGA zscore data export
+# =============================================================================
+def prepare_hga_zscore_data(output_dir: str):
+    """
+    Export HGA zscore data for all phase/condition combinations.
+    Loads epochs directly, computes per-electrode mean and trial-level SEM,
+    and includes significance info from statistics H5 files.
+    """
+    print("\n=== Preparing HGA zscore data ===")
+
+    zscore_dir = os.path.join(output_dir, "zscore")
+    os.makedirs(zscore_dir, exist_ok=True)
+
+    subjects = _discover_subjects()
+    print(f"  Found {len(subjects)} subjects")
+
+    for phase in PHASES:
+        for condition in CONDITIONS:
+            print(f"  Processing zscore {phase}/{condition}...")
+
+            all_means = []
+            all_sems = []
+            all_n_trials = []
+            all_ch_names = []
+            times = None
+            sfreq = None
+
+            for subject in tqdm(subjects, desc=f'    {phase}/{condition}', leave=False):
+                epoch = _load_zscore_epoch(subject, phase, condition)
+                if epoch is None:
+                    continue
+
+                epoch_data = epoch._data  # (n_trials, n_ch, n_times)
+                n_trials = epoch_data.shape[0]
+
+                # Compute mean and SEM across trials
+                data_mean = np.nanmean(epoch_data, axis=0)  # (n_ch, n_times)
+                data_std = np.nanstd(epoch_data, axis=0, ddof=1)  # (n_ch, n_times)
+                data_sem = data_std / np.sqrt(n_trials)  # (n_ch, n_times)
+
+                if times is None:
+                    times = epoch.times
+                    sfreq = epoch.info['sfreq']
+
+                ch_names = _prefix_ch_names(epoch.ch_names, subject)
+
+                all_means.append(data_mean)
+                all_sems.append(data_sem)
+                all_n_trials.extend([n_trials] * len(ch_names))
+                all_ch_names.extend(ch_names)
+
+            if not all_means:
+                print(f"    Warning: No data for {phase}/{condition}")
+                continue
+
+            concat_mean = np.concatenate(all_means, axis=0)
+            concat_sem = np.concatenate(all_sems, axis=0)
+            n_electrodes = concat_mean.shape[0]
+            n_times = concat_mean.shape[1]
+
+            # Load significance from statistics
+            sig_channels = _build_sig_channels(
+                subjects, all_ch_names, phase, condition=condition
+            )
+            mask = _build_sig_mask(
+                all_ch_names, n_times, phase, condition=condition,
+                times=times
+            )
+
+            zscore_data = {
+                "phase": phase,
+                "condition": condition,
+                "times": np.round(times, 4).tolist(),
+                "sfreq": float(sfreq),
+                "channel_names": all_ch_names,
+                "n_electrodes": n_electrodes,
+                "n_times": n_times,
+                "data": _compress_array(concat_mean),
+                "trial_sem": _compress_array(concat_sem),
+                "n_trials": all_n_trials,
+                "sig_channels": sig_channels,
+                "mask": mask.tolist() if mask is not None else None,
+            }
+
+            filename = f"{phase}_{condition}.json"
+            save_json(zscore_data, os.path.join(zscore_dir, filename))
+
+    print(f"  Zscore data export complete")
+
+
+# =============================================================================
+# 4b. HGA diff data export (computed from zscore epochs)
+# =============================================================================
+def prepare_hga_diff_data(output_dir: str):
+    """
+    Export HGA difference data computed from zscore epochs.
+    Supports condition, lexicality, and neighborhood diff types.
+    """
+    print("\n=== Preparing HGA diff data ===")
+
+    diff_dir = os.path.join(output_dir, "diff")
+    os.makedirs(diff_dir, exist_ok=True)
+
+    subjects = _discover_subjects()
+    stim_props = _load_stim_properties()
+
+    for diff_type, config in DIFF_TYPES.items():
+        print(f"  Processing diff type: {diff_type}")
+        type_dir = os.path.join(diff_dir, diff_type)
+        os.makedirs(type_dir, exist_ok=True)
+
+        if diff_type == 'condition':
+            _prepare_condition_diff(subjects, config, type_dir)
+        elif diff_type == 'lexicality':
+            _prepare_lexicality_diff(subjects, config, type_dir)
+        elif diff_type == 'neighborhood':
+            _prepare_neighborhood_diff(subjects, config, stim_props, type_dir)
+
+    print(f"  Diff data export complete")
+
+
+def _prepare_condition_diff(subjects: List[str], config: dict, type_dir: str):
+    """
+    Condition diff: compute from zscore epochs of two conditions.
+    No condition dimension — just phase × direction.
+    """
+    for phase in PHASES:
+        for direction in config["directions"]:
+            act_cond, bsl_cond = config["condition_map"][direction]
+            print(f"    {phase}/{direction} ({act_cond} vs {bsl_cond})")
+
+            all_data_act = []
+            all_data_bsl = []
+            all_sem_act = []
+            all_sem_bsl = []
+            all_n_act = []
+            all_n_bsl = []
+            all_ch_names = []
+            times = None
+            sfreq = None
+
+            for subject in tqdm(subjects, desc=f'      {direction}', leave=False):
+                epoch_act = _load_zscore_epoch(subject, phase, act_cond)
+                epoch_bsl = _load_zscore_epoch(subject, phase, bsl_cond)
+                if epoch_act is None or epoch_bsl is None:
+                    continue
+
+                # Use intersection of channels
+                ch_act = set(epoch_act.ch_names)
+                ch_bsl = set(epoch_bsl.ch_names)
+                common_ch = sorted(ch_act & ch_bsl)
+                if not common_ch:
+                    continue
+
+                act_idx = [epoch_act.ch_names.index(c) for c in common_ch]
+                bsl_idx = [epoch_bsl.ch_names.index(c) for c in common_ch]
+
+                act_data = epoch_act._data[:, act_idx, :]  # (n_trials, n_ch, n_times)
+                bsl_data = epoch_bsl._data[:, bsl_idx, :]
+
+                n_act = act_data.shape[0]
+                n_bsl = bsl_data.shape[0]
+
+                mean_act = np.nanmean(act_data, axis=0)
+                mean_bsl = np.nanmean(bsl_data, axis=0)
+                sem_act = np.nanstd(act_data, axis=0, ddof=1) / np.sqrt(n_act)
+                sem_bsl = np.nanstd(bsl_data, axis=0, ddof=1) / np.sqrt(n_bsl)
+
+                if times is None:
+                    times = epoch_act.times
+                    sfreq = epoch_act.info['sfreq']
+
+                ch_names = _prefix_ch_names(common_ch, subject)
+
+                all_data_act.append(mean_act)
+                all_data_bsl.append(mean_bsl)
+                all_sem_act.append(sem_act)
+                all_sem_bsl.append(sem_bsl)
+                all_n_act.extend([n_act] * len(common_ch))
+                all_n_bsl.extend([n_bsl] * len(common_ch))
+                all_ch_names.extend(ch_names)
+
+            if not all_data_act:
+                continue
+
+            concat_act = np.concatenate(all_data_act, axis=0)
+            concat_bsl = np.concatenate(all_data_bsl, axis=0)
+            concat_diff = concat_act - concat_bsl
+            concat_sem_act = np.concatenate(all_sem_act, axis=0)
+            concat_sem_bsl = np.concatenate(all_sem_bsl, axis=0)
+            concat_sem_diff = np.sqrt(concat_sem_act**2 + concat_sem_bsl**2)
+            n_electrodes = concat_act.shape[0]
+            n_times = concat_act.shape[1]
+
+            sig_channels = _build_sig_channels(
+                subjects, all_ch_names, phase,
+                direction=direction, diff_type='condition'
+            )
+            mask = _build_sig_mask(
+                all_ch_names, n_times, phase,
+                direction=direction, diff_type='condition',
+                times=times
+            )
+
+            diff_data = {
+                "phase": phase,
+                "condition": None,
+                "diff_type": "condition",
+                "direction": direction,
+                "times": np.round(times, 4).tolist(),
+                "sfreq": float(sfreq),
+                "channel_names": all_ch_names,
+                "n_electrodes": n_electrodes,
+                "n_times": n_times,
+                "data_act": _compress_array(concat_act),
+                "data_bsl": _compress_array(concat_bsl),
+                "data_diff": _compress_array(concat_diff),
+                "trial_sem_act": _compress_array(concat_sem_act),
+                "trial_sem_bsl": _compress_array(concat_sem_bsl),
+                "trial_sem_diff": _compress_array(concat_sem_diff),
+                "n_trials_act": all_n_act,
+                "n_trials_bsl": all_n_bsl,
+                "sig_channels": sig_channels,
+                "mask": mask.tolist() if mask is not None else None,
+            }
+
+            filename = f"{direction}_{phase}.json"
+            save_json(diff_data, os.path.join(type_dir, filename))
+
+
+def _prepare_lexicality_diff(subjects: List[str], config: dict, type_dir: str):
+    """
+    Lexicality diff: split zscore trials by stim_type (Word/Nonword),
+    compute group means and difference. Has condition dimension.
+    """
+    for phase in PHASES:
+        for condition in CONDITIONS:
+            for direction in config["directions"]:
+                act_stim, bsl_stim = config["stim_type_map"][direction]
+                print(f"    {phase}/{condition}/{direction} ({act_stim} vs {bsl_stim})")
+
+                all_data_act = []
+                all_data_bsl = []
+                all_sem_act = []
+                all_sem_bsl = []
+                all_n_act = []
+                all_n_bsl = []
+                all_ch_names = []
+                times = None
+                sfreq = None
+
+                for subject in tqdm(subjects, desc=f'      {direction}', leave=False):
+                    epoch = _load_zscore_epoch(subject, phase, condition)
+                    if epoch is None:
+                        continue
+                    if epoch.metadata is None or 'stim_type' not in epoch.metadata.columns:
+                        continue
+
+                    # Split trials by stim_type
+                    act_mask = epoch.metadata['stim_type'].values == act_stim
+                    bsl_mask = epoch.metadata['stim_type'].values == bsl_stim
+
+                    if act_mask.sum() == 0 or bsl_mask.sum() == 0:
+                        continue
+
+                    act_data = epoch._data[act_mask]  # (n_act, n_ch, n_times)
+                    bsl_data = epoch._data[bsl_mask]  # (n_bsl, n_ch, n_times)
+
+                    n_act = act_data.shape[0]
+                    n_bsl = bsl_data.shape[0]
+
+                    mean_act = np.nanmean(act_data, axis=0)
+                    mean_bsl = np.nanmean(bsl_data, axis=0)
+                    sem_act = np.nanstd(act_data, axis=0, ddof=1) / np.sqrt(n_act)
+                    sem_bsl = np.nanstd(bsl_data, axis=0, ddof=1) / np.sqrt(n_bsl)
+
+                    if times is None:
+                        times = epoch.times
+                        sfreq = epoch.info['sfreq']
+
+                    ch_names = _prefix_ch_names(epoch.ch_names, subject)
+
+                    all_data_act.append(mean_act)
+                    all_data_bsl.append(mean_bsl)
+                    all_sem_act.append(sem_act)
+                    all_sem_bsl.append(sem_bsl)
+                    all_n_act.extend([n_act] * len(ch_names))
+                    all_n_bsl.extend([n_bsl] * len(ch_names))
+                    all_ch_names.extend(ch_names)
+
+                if not all_data_act:
+                    continue
+
+                concat_act = np.concatenate(all_data_act, axis=0)
+                concat_bsl = np.concatenate(all_data_bsl, axis=0)
+                concat_diff = concat_act - concat_bsl
+                concat_sem_act = np.concatenate(all_sem_act, axis=0)
+                concat_sem_bsl = np.concatenate(all_sem_bsl, axis=0)
+                concat_sem_diff = np.sqrt(concat_sem_act**2 + concat_sem_bsl**2)
+                n_electrodes = concat_act.shape[0]
+                n_times = concat_act.shape[1]
+
+                sig_channels = _build_sig_channels(
+                    subjects, all_ch_names, phase,
+                    condition=condition, direction=direction,
+                    diff_type='lexicality'
+                )
+                mask = _build_sig_mask(
+                    all_ch_names, n_times, phase,
+                    condition=condition, direction=direction,
+                    diff_type='lexicality', times=times
+                )
+
+                diff_data = {
+                    "phase": phase,
+                    "condition": condition,
+                    "diff_type": "lexicality",
+                    "direction": direction,
+                    "times": np.round(times, 4).tolist(),
+                    "sfreq": float(sfreq),
+                    "channel_names": all_ch_names,
+                    "n_electrodes": n_electrodes,
+                    "n_times": n_times,
+                    "data_act": _compress_array(concat_act),
+                    "data_bsl": _compress_array(concat_bsl),
+                    "data_diff": _compress_array(concat_diff),
+                    "trial_sem_act": _compress_array(concat_sem_act),
+                    "trial_sem_bsl": _compress_array(concat_sem_bsl),
+                    "trial_sem_diff": _compress_array(concat_sem_diff),
+                    "n_trials_act": all_n_act,
+                    "n_trials_bsl": all_n_bsl,
+                    "sig_channels": sig_channels,
+                    "mask": mask.tolist() if mask is not None else None,
+                }
+
+                filename = f"{direction}_{phase}_{condition}.json"
+                save_json(diff_data, os.path.join(type_dir, filename))
+
+
+def _prepare_neighborhood_diff(subjects: List[str], config: dict,
+                               stim_props: dict, type_dir: str):
+    """
+    Neighborhood diff: split trials by neighborhood density
+    (High/Low) using stim_properties.json. Has condition dimension.
+    Same structure as lexicality diff — ready for future data.
+    """
+    # Build token -> neighborhood lookup from stim_properties
+    token_to_neighborhood = {}
+    for token, props in stim_props.items():
+        if 'neighborhood' in props:
+            token_to_neighborhood[token] = props['neighborhood']
+
+    if not token_to_neighborhood:
+        print("    Warning: No neighborhood info in stim_properties.json, skipping")
+        return
+
+    for phase in PHASES:
+        for condition in CONDITIONS:
+            for direction in config["directions"]:
+                act_group, bsl_group = config["neighborhood_map"][direction]
+                print(f"    {phase}/{condition}/{direction} ({act_group} vs {bsl_group})")
+
+                all_data_act = []
+                all_data_bsl = []
+                all_sem_act = []
+                all_sem_bsl = []
+                all_n_act = []
+                all_n_bsl = []
+                all_ch_names = []
+                times = None
+                sfreq = None
+
+                for subject in tqdm(subjects, desc=f'      {direction}', leave=False):
+                    epoch = _load_zscore_epoch(subject, phase, condition)
+                    if epoch is None:
+                        continue
+
+                    # Get token for each trial via event_id reverse lookup
+                    event_id_rev = {v: k for k, v in epoch.event_id.items()}
+                    trial_events = epoch.events[:, 2]
+                    trial_tokens = [event_id_rev.get(e, None) for e in trial_events]
+
+                    # Classify by neighborhood density
+                    act_mask = np.array([
+                        token_to_neighborhood.get(t) == act_group
+                        if t is not None else False
+                        for t in trial_tokens
+                    ])
+                    bsl_mask = np.array([
+                        token_to_neighborhood.get(t) == bsl_group
+                        if t is not None else False
+                        for t in trial_tokens
+                    ])
+
+                    if act_mask.sum() == 0 or bsl_mask.sum() == 0:
+                        continue
+
+                    act_data = epoch._data[act_mask]
+                    bsl_data = epoch._data[bsl_mask]
+
+                    n_act = act_data.shape[0]
+                    n_bsl = bsl_data.shape[0]
+
+                    mean_act = np.nanmean(act_data, axis=0)
+                    mean_bsl = np.nanmean(bsl_data, axis=0)
+                    sem_act = np.nanstd(act_data, axis=0, ddof=1) / np.sqrt(n_act)
+                    sem_bsl = np.nanstd(bsl_data, axis=0, ddof=1) / np.sqrt(n_bsl)
+
+                    if times is None:
+                        times = epoch.times
+                        sfreq = epoch.info['sfreq']
+
+                    ch_names = _prefix_ch_names(epoch.ch_names, subject)
+
+                    all_data_act.append(mean_act)
+                    all_data_bsl.append(mean_bsl)
+                    all_sem_act.append(sem_act)
+                    all_sem_bsl.append(sem_bsl)
+                    all_n_act.extend([n_act] * len(ch_names))
+                    all_n_bsl.extend([n_bsl] * len(ch_names))
+                    all_ch_names.extend(ch_names)
+
+                if not all_data_act:
+                    continue
+
+                concat_act = np.concatenate(all_data_act, axis=0)
+                concat_bsl = np.concatenate(all_data_bsl, axis=0)
+                concat_diff = concat_act - concat_bsl
+                concat_sem_act = np.concatenate(all_sem_act, axis=0)
+                concat_sem_bsl = np.concatenate(all_sem_bsl, axis=0)
+                concat_sem_diff = np.sqrt(concat_sem_act**2 + concat_sem_bsl**2)
+                n_electrodes = concat_act.shape[0]
+                n_times_val = concat_act.shape[1]
+
+                sig_channels = _build_sig_channels(
+                    subjects, all_ch_names, phase,
+                    condition=condition, direction=direction,
+                    diff_type='neighborhood'
+                )
+                mask = _build_sig_mask(
+                    all_ch_names, n_times_val, phase,
+                    condition=condition, direction=direction,
+                    diff_type='neighborhood', times=times
+                )
+
+                diff_data = {
+                    "phase": phase,
+                    "condition": condition,
+                    "diff_type": "neighborhood",
+                    "direction": direction,
+                    "times": np.round(times, 4).tolist(),
+                    "sfreq": float(sfreq),
+                    "channel_names": all_ch_names,
+                    "n_electrodes": n_electrodes,
+                    "n_times": n_times_val,
+                    "data_act": _compress_array(concat_act),
+                    "data_bsl": _compress_array(concat_bsl),
+                    "data_diff": _compress_array(concat_diff),
+                    "trial_sem_act": _compress_array(concat_sem_act),
+                    "trial_sem_bsl": _compress_array(concat_sem_bsl),
+                    "trial_sem_diff": _compress_array(concat_sem_diff),
+                    "n_trials_act": all_n_act,
+                    "n_trials_bsl": all_n_bsl,
+                    "sig_channels": sig_channels,
+                    "mask": mask.tolist() if mask is not None else None,
+                }
+
+                filename = f"{direction}_{phase}_{condition}.json"
+                save_json(diff_data, os.path.join(type_dir, filename))
+
+
+def _compress_array(arr: np.ndarray, decimals: int = 4) -> list:
+    """
+    Compress a numpy array for JSON export.
+    Rounds to specified decimals and converts NaN to null.
+    """
+    rounded = np.round(arr, decimals)
+    # Replace NaN with None for JSON compatibility
+    result = []
+    for row in rounded:
+        row_list = []
+        for val in row:
+            if np.isnan(val) or np.isinf(val):
+                row_list.append(None)
+            else:
+                row_list.append(round(float(val), decimals))
+        result.append(row_list)
+    return result
+
+
+# =============================================================================
+# 5. Metadata summary
+# =============================================================================
+def prepare_metadata(output_dir: str):
+    """
+    Export metadata summary file with available data keys,
+    configuration, and viewer settings.
+    """
+    print("\n=== Preparing metadata ===")
+    
+    zscore_files = []
+    zscore_dir = os.path.join(output_dir, "zscore")
+    if os.path.exists(zscore_dir):
+        zscore_files = sorted([f for f in os.listdir(zscore_dir) if f.endswith('.json')])
+    
+    diff_files = {}
+    diff_dir = os.path.join(output_dir, "diff")
+    if os.path.exists(diff_dir):
+        for dtype in os.listdir(diff_dir):
+            dtype_dir = os.path.join(diff_dir, dtype)
+            if os.path.isdir(dtype_dir):
+                diff_files[dtype] = sorted([
+                    f for f in os.listdir(dtype_dir) if f.endswith('.json')
+                ])
+    
+    metadata = {
+        "version": "2.0",
+        "generated_by": "prepare_data.py",
+        "task": TASK,
+        "band": BAND,
+        "reference": REFERENCE,
+        "phases": PHASES,
+        "conditions": CONDITIONS,
+        "diff_types": {
+            dt: {
+                "directions": cfg["directions"],
+                "needs_condition": cfg["needs_condition"],
+            }
+            for dt, cfg in DIFF_TYPES.items()
+        },
+        "available_data": {
+            "zscore": zscore_files,
+            "diff": diff_files,
+        },
+    }
+    
+    save_json(metadata, os.path.join(output_dir, "metadata.json"), compact=False)
+
+
+# =============================================================================
+# Main
+# =============================================================================
+def main():
+    parser = argparse.ArgumentParser(description="Prepare data for Brain Viewer")
+    parser.add_argument(
+        "--output-dir", "-o",
+        default=os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "brain_viewer_data"
+        ),
+        help="Output directory for viewer data (default: ../../brain_viewer_data)"
+    )
+    parser.add_argument(
+        "--skip-mesh", action="store_true",
+        help="Skip brain mesh generation"
+    )
+    parser.add_argument(
+        "--skip-atlas", action="store_true",
+        help="Skip ROI atlas generation"
+    )
+    parser.add_argument(
+        "--skip-electrodes", action="store_true",
+        help="Skip electrode metadata generation"
+    )
+    parser.add_argument(
+        "--skip-zscore", action="store_true",
+        help="Skip zscore HGA data generation"
+    )
+    parser.add_argument(
+        "--skip-diff", action="store_true",
+        help="Skip diff HGA data generation"
+    )
+    
+    args = parser.parse_args()
+    output_dir = os.path.abspath(args.output_dir)
+    
+    print(f"Brain Viewer Data Preparation")
+    print(f"=" * 50)
+    print(f"BIDS root:    {BIDS_ROOT}")
+    print(f"Subjects dir: {SUBJECTS_DIR}")
+    print(f"Recon dir:    {RECON_DIR}")
+    print(f"Output dir:   {output_dir}")
+    print(f"Task:         {TASK}")
+    print(f"Band:         {BAND}")
+    print(f"Reference:    {REFERENCE}")
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Step 1: Brain mesh
+    if not args.skip_mesh:
+        prepare_brain_mesh(output_dir)
+    
+    # Step 2: ROI atlas
+    if not args.skip_atlas:
+        prepare_roi_atlas(output_dir)
+    
+    # Step 3: Electrode metadata
+    if not args.skip_electrodes:
+        prepare_electrodes(output_dir)
+    
+    # Step 4: HGA zscore data
+    if not args.skip_zscore:
+        prepare_hga_zscore_data(output_dir)
+    
+    # Step 5: HGA diff data
+    if not args.skip_diff:
+        prepare_hga_diff_data(output_dir)
+    
+    # Step 6: Metadata summary
+    prepare_metadata(output_dir)
+    
+    print(f"\n{'=' * 50}")
+    print(f"Data preparation complete!")
+    print(f"Output directory: {output_dir}")
+    
+    # Print total size
+    total_size = 0
+    for root, dirs, files in os.walk(output_dir):
+        for f in files:
+            total_size += os.path.getsize(os.path.join(root, f))
+    print(f"Total size: {total_size / (1024*1024):.1f} MB")
+    
+    print(f"\nNext steps:")
+    print(f"  1. Download the viewer and data to your local machine:")
+    print(f"     rsync -avz user@hpc:{output_dir}/ ./brain_viewer_data/")
+    print(f"  2. Open the viewer in your browser (see viewer/README)")
+
+
+if __name__ == "__main__":
+    main()

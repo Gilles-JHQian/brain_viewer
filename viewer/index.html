@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brain Viewer — Interactive Electrode Visualization</title>
+    <link rel="stylesheet" href="css/style.css?v=2">
+    <!-- Three.js for 3D rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/controls/TrackballControls.js"></script>
+    <!-- Plotly.js for HGA trace plots -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+    <!-- ====== LEFT SIDEBAR ====== -->
+    <div id="left-sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h2>Brain Viewer</h2>
+        </div>
+
+        <!-- Data Type -->
+        <div class="panel">
+            <div class="panel-header" data-toggle="data-type-panel">
+                <span>Data Type</span>
+                <span class="toggle-icon">▾</span>
+            </div>
+            <div class="panel-body" id="data-type-panel">
+                <div class="control-group">
+                    <label>Type</label>
+                    <select id="select-data-type">
+                        <option value="zscore" selected>Z-score</option>
+                        <option value="diff">Difference (diff)</option>
+                    </select>
+                </div>
+                <div class="control-group" id="diff-type-group" style="display:none;">
+                    <label>Diff Type</label>
+                    <select id="select-diff-type">
+                        <option value="condition">Condition (Dec vs Rep)</option>
+                        <option value="lexicality">Lexicality (Nw vs Wd)</option>
+                        <option value="neighborhood">Neighborhood (Hd vs Ld)</option>
+                    </select>
+                </div>
+                <div class="control-group" id="diff-direction-group" style="display:none;">
+                    <label>Direction</label>
+                    <select id="select-diff-direction"></select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase & Condition -->
+        <div class="panel">
+            <div class="panel-header" data-toggle="phase-cond-panel">
+                <span>Phase & Condition</span>
+                <span class="toggle-icon">▾</span>
+            </div>
+            <div class="panel-body" id="phase-cond-panel">
+                <div class="control-group">
+                    <label>Phase</label>
+                    <select id="select-phase">
+                        <option value="Cue">Cue</option>
+                        <option value="Stimulus" selected>Stimulus</option>
+                        <option value="Response">Response</option>
+                    </select>
+                </div>
+                <div class="control-group" id="condition-group">
+                    <label>Condition</label>
+                    <select id="select-condition">
+                        <option value="Decision" selected>Decision</option>
+                        <option value="Passive">Passive</option>
+                        <option value="Repeat">Repeat</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subject & ROI Filter -->
+        <div class="panel">
+            <div class="panel-header" data-toggle="filter-panel">
+                <span>Filters</span>
+                <span class="toggle-icon">▾</span>
+            </div>
+            <div class="panel-body" id="filter-panel">
+                <div class="control-group">
+                    <label>Subject</label>
+                    <div class="multi-select-actions">
+                        <button type="button" id="btn-subject-all" class="ms-btn">All</button>
+                        <button type="button" id="btn-subject-none" class="ms-btn">None</button>
+                    </div>
+                    <div class="multi-select-list" id="subject-list"></div>
+                </div>
+                <div class="control-group">
+                    <label>ROI</label>
+                    <div class="multi-select-actions">
+                        <button type="button" id="btn-roi-all" class="ms-btn">All</button>
+                        <button type="button" id="btn-roi-none" class="ms-btn">None</button>
+                    </div>
+                    <div class="multi-select-list" id="roi-list"></div>
+                </div>
+                <div class="control-group">
+                    <label>Hemisphere</label>
+                    <select id="select-hemi">
+                        <option value="all" selected>Both</option>
+                        <option value="L">Left</option>
+                        <option value="R">Right</option>
+                    </select>
+                </div>
+                <div class="control-group checkbox-group">
+                    <label for="chk-sig-only">Show Sig Only</label>
+                    <input type="checkbox" id="chk-sig-only">
+                </div>
+                <!-- Sig Group: cross-condition sig overlap -->
+                <div id="sig-group-section" style="display:none;">
+                    <div class="control-group checkbox-group">
+                        <label for="chk-sig-group">Select Sig Group</label>
+                        <input type="checkbox" id="chk-sig-group">
+                    </div>
+                    <div id="sig-group-controls" style="display:none;">
+                        <div class="control-group">
+                            <label>Set Operation</label>
+                            <div class="radio-row">
+                                <label class="radio-label">
+                                    <input type="radio" name="sig-group-op" value="intersection" checked>
+                                    Intersection
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="sig-group-op" value="union">
+                                    Union
+                                </label>
+                            </div>
+                        </div>
+                        <div class="control-group" id="sig-group-phase-group">
+                            <label>Phases</label>
+                            <div class="multi-select-list multi-select-compact" id="sig-group-phase-list"></div>
+                        </div>
+                        <div class="control-group" id="sig-group-condition-group">
+                            <label>Conditions</label>
+                            <div class="multi-select-list multi-select-compact" id="sig-group-condition-list"></div>
+                        </div>
+                        <div class="control-group" id="sig-group-direction-group" style="display:none;">
+                            <label>Directions</label>
+                            <div class="multi-select-list multi-select-compact" id="sig-group-direction-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Electrode Coloring Mode -->
+        <div class="panel">
+            <div class="panel-header" data-toggle="color-panel">
+                <span>Electrode Colors</span>
+                <span class="toggle-icon">▾</span>
+            </div>
+            <div class="panel-body" id="color-panel">
+                <div class="control-group">
+                    <label>Color Mode</label>
+                    <select id="select-color-mode">
+                        <option value="roi" selected>By ROI</option>
+                        <option value="hga">By HGA Value</option>
+                    </select>
+                </div>
+                <div id="hga-color-controls" style="display:none;">
+                    <div class="control-group">
+                        <label>Time Window (s)</label>
+                        <div class="range-inputs">
+                            <input type="number" id="hga-time-min" step="0.01" class="mini-input" value="0.00">
+                            <span>—</span>
+                            <input type="number" id="hga-time-max" step="0.01" class="mini-input" value="0.75">
+                        </div>
+                    </div>
+                    <div class="control-group checkbox-group">
+                        <label for="chk-two-way-cmap">Two-way Colormap</label>
+                        <input type="checkbox" id="chk-two-way-cmap" checked>
+                    </div>
+                    <div class="control-group">
+                        <label>Colormap</label>
+                        <select id="select-hga-cmap"></select>
+                    </div>
+                    <div class="control-group">
+                        <label>CLim Mode</label>
+                        <select id="select-clim-mode">
+                            <option value="percentile" selected>Percentile</option>
+                            <option value="percentile-current">Percentile (Current)</option>
+                            <option value="absolute">Absolute</option>
+                        </select>
+                    </div>
+                    <div id="clim-percentile-controls">
+                        <div class="control-group">
+                            <label>Percentile Range</label>
+                            <div class="range-inputs">
+                                <input type="number" id="clim-pct-min" step="1" min="0" max="100" value="5" class="mini-input">
+                                <span>%&nbsp;—&nbsp;</span>
+                                <input type="number" id="clim-pct-max" step="1" min="0" max="100" value="95" class="mini-input">
+                                <span>%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="clim-absolute-controls" style="display:none;">
+                        <div class="control-group">
+                            <label>Value Range</label>
+                            <div class="range-inputs">
+                                <input type="number" id="clim-abs-min" step="0.1" value="-1" class="mini-input">
+                                <span>—</span>
+                                <input type="number" id="clim-abs-max" step="0.1" value="1" class="mini-input">
+                            </div>
+                        </div>
+                    </div>
+                    <button id="btn-apply-hga-color" class="btn btn-sm">Apply</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loading-indicator" class="loading-indicator" style="display:none;">
+            <div class="spinner"></div>
+            <span id="loading-text">Loading...</span>
+        </div>
+    </div>
+
+    <!-- ====== MAIN 3D VIEWPORT ====== -->
+    <div id="viewport">
+        <canvas id="brain-canvas"></canvas>
+
+        <!-- Loading overlay (shown during init) -->
+        <div id="loading-overlay">
+            <div class="spinner-big"></div>
+            <div class="loading-msg" id="loading-msg">Initializing...</div>
+        </div>
+
+        <!-- Error overlay (shown on fatal errors) -->
+        <div id="error-overlay" style="display:none;"></div>
+
+        <!-- View preset buttons -->
+        <div id="view-controls">
+            <button class="view-btn" data-view="left" title="Left">L</button>
+            <button class="view-btn" data-view="right" title="Right">R</button>
+            <button class="view-btn" data-view="anterior" title="Anterior">A</button>
+            <button class="view-btn" data-view="posterior" title="Posterior">P</button>
+            <button class="view-btn" data-view="superior" title="Superior">S</button>
+            <button class="view-btn" data-view="inferior" title="Inferior">I</button>
+            <button class="view-btn" data-view="reset" title="Reset View">⟲</button>
+        </div>
+
+        <!-- Clipping plane slider -->
+        <div id="clip-controls">
+            <label title="Clipping Plane">✂</label>
+            <input type="range" id="clip-slider" min="0" max="100" value="100" step="1">
+            <select id="clip-axis" title="Clipping Axis">
+                <option value="x">X (L-R)</option>
+                <option value="y">Y (A-P)</option>
+                <option value="z">Z (S-I)</option>
+            </select>
+        </div>
+
+        <!-- Settings gear button -->
+        <button id="btn-settings" class="icon-btn" title="Settings">⚙</button>
+        <!-- Export button -->
+        <button id="btn-export" class="icon-btn" title="Export" style="top: 56px;">📤</button>
+        
+        <!-- Status bar -->
+        <div id="status-bar">
+            <span id="status-text">Ready</span>
+        </div>
+    </div>
+
+    <!-- ====== RIGHT SIDEBAR ====== -->
+    <div id="right-sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h2>Details</h2>
+        </div>
+
+        <!-- Info Panel -->
+        <div class="panel">
+            <div class="panel-header" data-toggle="info-panel">
+                <span>Info</span>
+                <span class="toggle-icon">▾</span>
+            </div>
+            <div class="panel-body" id="info-panel">
+                <div class="info-row">
+                    <span class="info-label">Visible Electrodes:</span>
+                    <span class="info-value" id="info-visible-count">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Total Electrodes:</span>
+                    <span class="info-value" id="info-total-count">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Sig Electrodes:</span>
+                    <span class="info-value" id="info-sig-count">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Subjects:</span>
+                    <span class="info-value" id="info-subject-count">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Selected:</span>
+                    <span class="info-value" id="info-selected">None</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- HGA Trace Plot -->
+        <div class="panel">
+            <div class="panel-header" data-toggle="hga-panel">
+                <span>HGA Trace</span>
+                <span class="toggle-icon">▾</span>
+            </div>
+            <div class="panel-body" id="hga-panel">
+                <div id="hga-plot-container">
+                    <div id="hga-plot-main" class="plot-area"></div>
+                    <div id="hga-plot-diff" class="plot-area" style="display:none;"></div>
+                </div>
+                <div id="hga-plot-info" class="plot-info">
+                    <span>Click an electrode or select filters to view HGA trace</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Electrode Detail -->
+        <div class="panel">
+            <div class="panel-header" data-toggle="electrode-detail-panel">
+                <span>Electrode Detail</span>
+                <span class="toggle-icon">▾</span>
+            </div>
+            <div class="panel-body" id="electrode-detail-panel">
+                <div class="info-row">
+                    <span class="info-label">Name:</span>
+                    <span class="info-value" id="detail-name">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Subject:</span>
+                    <span class="info-value" id="detail-subject">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Channel:</span>
+                    <span class="info-value" id="detail-channel">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">ROI:</span>
+                    <span class="info-value" id="detail-roi">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Hemisphere:</span>
+                    <span class="info-value" id="detail-hemi">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Atlas Label:</span>
+                    <span class="info-value" id="detail-atlas">—</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Position (mm):</span>
+                    <span class="info-value" id="detail-position">—</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== SETTINGS MODAL ====== -->
+    <div id="settings-modal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button id="btn-close-settings" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h4>Brain Surface</h4>
+                    <div class="control-group">
+                        <label>Opacity</label>
+                        <input type="range" id="setting-brain-opacity" min="0" max="100" value="20" step="1">
+                        <span class="range-value" id="val-brain-opacity">0.20</span>
+                    </div>
+                    <div class="control-group">
+                        <label>Color</label>
+                        <input type="color" id="setting-brain-color" value="#e8e8e8">
+                    </div>
+                    <div class="control-group">
+                        <label>Show ROI Colors on Brain</label>
+                        <input type="checkbox" id="setting-show-roi-surface">
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>Electrodes</h4>
+                    <div class="control-group">
+                        <label>Radius (mm)</label>
+                        <input type="range" id="setting-electrode-radius" min="1" max="10" value="1.25" step="0.25">
+                        <span class="range-value" id="val-electrode-radius">1.25</span>
+                    </div>
+                    <div class="control-group">
+                        <label>Opacity</label>
+                        <input type="range" id="setting-electrode-opacity" min="0" max="100" value="90" step="1">
+                        <span class="range-value" id="val-electrode-opacity">0.90</span>
+                    </div>
+                    <div class="control-group">
+                        <label>Highlight Radius (mm)</label>
+                        <input type="range" id="setting-highlight-radius" min="2" max="15" value="5" step="0.5">
+                        <span class="range-value" id="val-highlight-radius">5.0</span>
+                    </div>
+                    <div class="control-group">
+                        <label>Project to Surface</label>
+                        <input type="checkbox" id="setting-project-to-surface">
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>Rendering</h4>
+                    <div class="control-group">
+                        <label>Background Color</label>
+                        <input type="color" id="setting-bg-color" value="#1a1a2e">
+                    </div>
+                    <div class="control-group">
+                        <label>Ambient Light Intensity</label>
+                        <input type="range" id="setting-ambient-light" min="0" max="100" value="60" step="5">
+                        <span class="range-value" id="val-ambient-light">0.60</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== EXPORT MODAL ====== -->
+    <div id="export-modal" class="modal" style="display:none;">
+        <div class="modal-content export-modal-content">
+            <div class="modal-header">
+                <h3>Export</h3>
+                <button id="btn-close-export" class="close-btn">&times;</button>
+            </div>
+
+            <!-- Tab buttons -->
+            <div class="export-tabs">
+                <button class="export-tab-btn active" data-tab="trace">HGA Trace</button>
+                <button class="export-tab-btn" data-tab="brain">Brain Plot</button>
+                <button class="export-tab-btn" data-tab="venn">Venn Diagram</button>
+            </div>
+
+            <!-- Tab panels -->
+            <div class="modal-body export-body">
+
+                <!-- ===== Trace Tab ===== -->
+                <div id="export-panel-trace" class="export-tab-panel active">
+                    <div class="export-controls-row">
+                        <div class="control-group">
+                            <label>Width (px)</label>
+                            <input type="number" id="export-trace-width" value="1200" min="400" max="4000" step="100">
+                        </div>
+                        <div class="control-group">
+                            <label>Height (px)</label>
+                            <input type="number" id="export-trace-height" value="800" min="300" max="3000" step="100">
+                        </div>
+                        <div class="control-group">
+                            <label>Scale</label>
+                            <input type="number" id="export-trace-scale" value="2" min="0.5" max="5" step="0.5" title="Render scale factor (higher = sharper)">
+                        </div>
+                        <div class="control-group">
+                            <label>Format</label>
+                            <select id="export-trace-format">
+                                <option value="png" selected>PNG</option>
+                                <option value="svg">SVG</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="export-controls-row">
+                        <div class="control-group">
+                            <label>Y-min</label>
+                            <input type="number" id="export-trace-ymin" value="-0.2" step="0.1" disabled>
+                        </div>
+                        <div class="control-group">
+                            <label>Y-max</label>
+                            <input type="number" id="export-trace-ymax" value="0.8" step="0.1" disabled>
+                        </div>
+                        <div class="control-group checkbox-group" style="margin-top:16px;">
+                            <input type="checkbox" id="export-trace-yauto" checked>
+                            <label for="export-trace-yauto">Auto Y-axis</label>
+                        </div>
+                    </div>
+                    <div class="export-controls-row">
+                        <div class="control-group checkbox-group" style="margin-top:4px;">
+                            <input type="checkbox" id="export-trace-venn">
+                            <label for="export-trace-venn">Show Venn</label>
+                        </div>
+                        <div class="control-group" id="trace-venn-dim-group" style="display:none;">
+                            <label>Compare</label>
+                            <select id="export-trace-venn-dim">
+                                <option value="row">Across Rows (Conditions)</option>
+                                <option value="col">Across Columns (Phases)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="export-action-row">
+                        <button id="btn-trace-generate" class="btn">Generate</button>
+                        <button id="btn-trace-save" class="btn btn-outline">💾 Save</button>
+                        <button id="btn-trace-copy" class="btn btn-outline">📋 Copy</button>
+                    </div>
+                    <div id="export-trace-preview" class="export-preview">
+                        <span class="export-preview-placeholder">Click "Generate" to preview</span>
+                    </div>
+                </div>
+
+                <!-- ===== Brain Tab ===== -->
+                <div id="export-panel-brain" class="export-tab-panel">
+                    <div class="export-controls-row">
+                        <div class="control-group">
+                            <label>Width (px)</label>
+                            <input type="number" id="export-brain-width" value="1200" min="400" max="4000" step="100">
+                        </div>
+                        <div class="control-group">
+                            <label>Height (px)</label>
+                            <input type="number" id="export-brain-height" value="600" min="300" max="3000" step="100">
+                        </div>
+                        <div class="control-group">
+                            <label>Scale</label>
+                            <input type="number" id="export-brain-scale" value="1" min="0.5" max="5" step="0.5" title="Render scale factor (higher = larger output)">
+                        </div>
+                        <div class="control-group">
+                            <label>Format</label>
+                            <select id="export-brain-format">
+                                <option value="png" selected>PNG</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="export-controls-row">
+                        <div class="control-group">
+                            <label>View</label>
+                            <select id="export-brain-view">
+                                <option value="current">Current View</option>
+                                <option value="LR" selected>L + R (Side by Side)</option>
+                                <option value="left">Left</option>
+                                <option value="right">Right</option>
+                                <option value="anterior">Anterior</option>
+                                <option value="posterior">Posterior</option>
+                                <option value="superior">Superior</option>
+                                <option value="inferior">Inferior</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Background</label>
+                            <input type="color" id="export-brain-bg" value="#ffffff">
+                        </div>
+                        <div class="control-group checkbox-group" style="margin-top:16px;">
+                            <input type="checkbox" id="export-brain-project">
+                            <label for="export-brain-project">Project to surface</label>
+                        </div>
+                    </div>
+                    <div class="export-action-row">
+                        <button id="btn-brain-generate" class="btn">Generate</button>
+                        <button id="btn-brain-save" class="btn btn-outline">💾 Save</button>
+                        <button id="btn-brain-copy" class="btn btn-outline">📋 Copy</button>
+                    </div>
+                    <div id="export-brain-preview" class="export-preview">
+                        <span class="export-preview-placeholder">Click "Generate" to preview</span>
+                    </div>
+                </div>
+
+                <!-- ===== Venn Tab ===== -->
+                <div id="export-panel-venn" class="export-tab-panel">
+                    <!-- Step 1: Data Source -->
+                    <div class="venn-section">
+                        <h4>1. Data Source</h4>
+                        <div class="export-controls-row">
+                            <div class="control-group">
+                                <label>Source</label>
+                                <select id="venn-data-source">
+                                    <option value="zscore" selected>Z-score (sig electrodes)</option>
+                                    <option value="diff">Difference (diff sig)</option>
+                                </select>
+                            </div>
+                            <div class="control-group" id="venn-diff-type-group" style="display:none;">
+                                <label>Diff Type</label>
+                                <select id="venn-diff-type">
+                                    <option value="condition">Condition</option>
+                                    <option value="lexicality">Lexicality</option>
+                                    <option value="neighborhood">Neighborhood</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Venn Dimensions -->
+                    <div class="venn-section">
+                        <h4>2. Venn Dimensions <span class="venn-hint">(max 2)</span></h4>
+                        <div class="venn-dim-checkboxes">
+                            <label class="venn-dim-label">
+                                <input type="checkbox" id="venn-dim-phase" value="phase"> Phase
+                            </label>
+                            <label class="venn-dim-label">
+                                <input type="checkbox" id="venn-dim-condition" value="condition"> Condition
+                            </label>
+                            <label class="venn-dim-label" id="venn-dim-direction-label" style="display:none;">
+                                <input type="checkbox" id="venn-dim-direction" value="direction"> Direction
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Non-Venn dimension filters (data scope) -->
+                    <div class="venn-section" id="venn-filter-section">
+                        <h4>3. Data Scope (non-Venn dimensions)</h4>
+                        <div id="venn-filter-phase-group" class="control-group" style="display:none;">
+                            <label>Phase</label>
+                            <div class="multi-select-list multi-select-compact" id="venn-filter-phase-list"></div>
+                        </div>
+                        <div id="venn-filter-condition-group" class="control-group" style="display:none;">
+                            <label>Condition</label>
+                            <div class="multi-select-list multi-select-compact" id="venn-filter-condition-list"></div>
+                        </div>
+                        <div id="venn-filter-direction-group" class="control-group" style="display:none;">
+                            <label>Direction</label>
+                            <div class="multi-select-list multi-select-compact" id="venn-filter-direction-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Venn circles selection -->
+                    <div class="venn-section" id="venn-circles-section">
+                        <h4>4. Venn Circles</h4>
+                        <div id="venn-circles-phase-group" class="control-group" style="display:none;">
+                            <label>Phase circles</label>
+                            <div class="multi-select-list multi-select-compact" id="venn-circles-phase-list"></div>
+                        </div>
+                        <div id="venn-circles-condition-group" class="control-group" style="display:none;">
+                            <label>Condition circles</label>
+                            <div class="multi-select-list multi-select-compact" id="venn-circles-condition-list"></div>
+                        </div>
+                        <div id="venn-circles-direction-group" class="control-group" style="display:none;">
+                            <label>Direction circles</label>
+                            <div class="multi-select-list multi-select-compact" id="venn-circles-direction-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Plot settings -->
+                    <div class="venn-section">
+                        <h4>Plot Settings</h4>
+                        <div class="export-controls-row">
+                            <div class="control-group">
+                                <label>Width (px)</label>
+                                <input type="number" id="venn-width" value="800" min="400" max="3000" step="100">
+                            </div>
+                            <div class="control-group">
+                                <label>Height (px)</label>
+                                <input type="number" id="venn-height" value="600" min="300" max="2000" step="100">
+                            </div>
+                            <div class="control-group">
+                                <label>Scale</label>
+                                <input type="number" id="venn-scale" value="2" min="0.5" max="5" step="0.5" title="Render scale factor (higher = sharper)">
+                            </div>
+                            <div class="control-group">
+                                <label>Background</label>
+                                <input type="color" id="venn-bg-color" value="#ffffff">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="export-action-row">
+                        <button id="btn-venn-generate" class="btn">Generate</button>
+                        <button id="btn-venn-save" class="btn btn-outline">💾 Save</button>
+                        <button id="btn-venn-copy" class="btn btn-outline">📋 Copy</button>
+                    </div>
+                    <div id="export-venn-preview" class="export-preview">
+                        <span class="export-preview-placeholder">Configure options above, then click "Generate"</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== JAVASCRIPT ====== -->
+    <script src="js/data-manager.js?v=4"></script>
+    <script src="js/brain-renderer.js?v=3"></script>
+    <script src="js/hga-plotter.js?v=2"></script>
+    <script src="js/ui-controls.js?v=5"></script>
+    <script src="js/settings.js?v=2"></script>
+    <script src="js/venn-diagram.js?v=1"></script>
+    <script src="js/export-manager.js?v=3"></script>
+    <script src="js/app.js?v=5"></script>
+</body>
+</html>

@@ -1,0 +1,904 @@
+/* =============================================================================
+   Brain Viewer — Main Stylesheet
+   ============================================================================= */
+
+/* Reset & base */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --sidebar-width: 280px;
+    --bg-dark: #1a1a2e;
+    --bg-sidebar: #16213e;
+    --bg-panel: #1c2a4a;
+    --bg-input: #0f1629;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0b0;
+    --accent: #4fc3f7;
+    --accent-hover: #81d4fa;
+    --border-color: #2a3a5c;
+    --panel-radius: 6px;
+    --transition: 0.2s ease;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--bg-dark);
+}
+
+body {
+    display: flex;
+}
+
+/* =============================================================================
+   Sidebars
+   ============================================================================= */
+.sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    height: 100vh;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-color);
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+}
+
+#right-sidebar {
+    border-right: none;
+    border-left: 1px solid var(--border-color);
+}
+
+.sidebar-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(0,0,0,0.15);
+}
+
+.sidebar-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+}
+
+/* Panels */
+.panel {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+    transition: background var(--transition);
+    user-select: none;
+}
+
+.panel-header:hover {
+    background: rgba(255,255,255,0.04);
+}
+
+.toggle-icon {
+    font-size: 10px;
+    transition: transform var(--transition);
+}
+
+.panel-header.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.panel-body {
+    padding: 8px 16px 12px;
+    transition: max-height 0.3s ease, opacity 0.2s ease;
+    overflow: hidden;
+}
+
+.panel-body.collapsed {
+    max-height: 0 !important;
+    padding: 0 16px;
+    opacity: 0;
+}
+
+/* Control groups */
+.control-group {
+    margin-bottom: 8px;
+}
+
+.control-group label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 3px;
+}
+
+.control-group select,
+.control-group input[type="number"] {
+    width: 100%;
+    padding: 5px 8px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+    transition: border-color var(--transition);
+}
+
+.control-group select:focus,
+.control-group input[type="number"]:focus {
+    border-color: var(--accent);
+}
+
+.control-group input[type="range"] {
+    width: 100%;
+    margin-top: 2px;
+    accent-color: var(--accent);
+}
+
+.control-group input[type="color"] {
+    width: 40px;
+    height: 28px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+    padding: 2px;
+}
+
+.control-group input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-direction: row;
+}
+
+.checkbox-group label {
+    display: inline !important;
+    margin-bottom: 0 !important;
+    cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+    order: -1;
+    flex-shrink: 0;
+}
+
+.range-inputs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Multi-select checkbox list */
+.multi-select-actions {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.ms-btn {
+    flex: 1;
+    padding: 3px 6px;
+    font-size: 10px;
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+}
+
+.ms-btn:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.multi-select-list {
+    max-height: 140px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-input);
+    padding: 2px 0;
+}
+
+.multi-select-list.multi-select-compact {
+    max-height: 80px;
+}
+
+/* Sig Group section indent */
+#sig-group-section {
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Radio row (horizontal) */
+.radio-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.radio-label input[type="radio"] {
+    accent-color: var(--accent);
+    margin: 0;
+}
+
+.multi-select-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.multi-select-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.multi-select-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.ms-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.ms-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.ms-item input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.ms-item label {
+    display: inline !important;
+    margin-bottom: 0 !important;
+    cursor: pointer;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mini-input {
+    width: 70px !important;
+    flex: 1;
+}
+
+.range-value {
+    display: inline-block;
+    min-width: 36px;
+    text-align: right;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-left: 4px;
+}
+
+/* Buttons */
+.btn {
+    padding: 6px 14px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition);
+}
+
+.btn:hover {
+    background: var(--accent-hover);
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+/* Info rows */
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.info-label {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.info-value {
+    color: var(--text-primary);
+    text-align: right;
+    word-break: break-all;
+    margin-left: 8px;
+}
+
+/* =============================================================================
+   Viewport
+   ============================================================================= */
+#viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-dark);
+}
+
+#brain-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* View preset buttons */
+#view-controls {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    gap: 4px;
+    z-index: 5;
+}
+
+.view-btn {
+    width: 32px;
+    height: 32px;
+    background: rgba(22, 33, 62, 0.85);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.view-btn:hover {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+}
+
+/* Clip controls */
+#clip-controls {
+    position: absolute;
+    bottom: 48px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(22, 33, 62, 0.85);
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    z-index: 5;
+}
+
+#clip-controls label {
+    font-size: 16px;
+    cursor: default;
+}
+
+#clip-slider {
+    width: 140px;
+    accent-color: var(--accent);
+}
+
+#clip-axis {
+    padding: 3px 6px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+/* Settings button */
+#btn-settings {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 5;
+}
+
+.icon-btn {
+    width: 36px;
+    height: 36px;
+    background: rgba(22, 33, 62, 0.85);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-btn:hover {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+}
+
+/* Status bar */
+#status-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 6px 14px;
+    background: rgba(22, 33, 62, 0.9);
+    border-top: 1px solid var(--border-color);
+    font-size: 11px;
+    color: var(--text-secondary);
+    z-index: 5;
+}
+
+/* =============================================================================
+   HGA Plot Area
+   ============================================================================= */
+.plot-area {
+    width: 100%;
+    height: 200px;
+    background: var(--bg-input);
+    border-radius: 4px;
+    margin-bottom: 6px;
+}
+
+.plot-info {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 8px;
+}
+
+#hga-plot-container {
+    /* Container for both plots */
+}
+
+/* =============================================================================
+   Modal (Settings)
+   ============================================================================= */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    width: 420px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    font-size: 16px;
+    color: var(--accent);
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 22px;
+    cursor: pointer;
+    transition: color var(--transition);
+    line-height: 1;
+}
+
+.close-btn:hover {
+    color: #fff;
+}
+
+.modal-body {
+    padding: 16px 18px;
+}
+
+.settings-section {
+    margin-bottom: 16px;
+}
+
+.settings-section h4 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent);
+    margin-bottom: 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* =============================================================================
+   Loading Indicator
+   ============================================================================= */
+.loading-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    color: var(--accent);
+    font-size: 12px;
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* =============================================================================
+   Scrollbar
+   ============================================================================= */
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}
+
+/* =============================================================================
+   Error overlay
+   ============================================================================= */
+#error-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 22, 41, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 40px;
+}
+
+#error-overlay .error-content {
+    text-align: center;
+    max-width: 560px;
+}
+
+#error-overlay h2 {
+    color: #ff6b6b;
+    margin-bottom: 16px;
+    font-size: 22px;
+}
+
+#error-overlay p {
+    color: #a0a0b0;
+    line-height: 1.7;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+#error-overlay pre {
+    background: #0f1629;
+    padding: 14px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #4fc3f7;
+    text-align: left;
+    display: inline-block;
+    margin: 12px 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+#error-overlay code {
+    background: #0f1629;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+/* Loading overlay */
+#loading-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 22, 41, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 90;
+}
+
+#loading-overlay .spinner-big {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(79, 195, 247, 0.2);
+    border-top-color: #4fc3f7;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+#loading-overlay .loading-msg {
+    color: #a0a0b0;
+    margin-top: 16px;
+    font-size: 14px;
+}
+
+/* =============================================================================
+   Responsive adjustments
+   ============================================================================= */
+@media (max-width: 1200px) {
+    :root {
+        --sidebar-width: 240px;
+    }
+}
+
+/* =============================================================================
+   Export Modal — Overrides & additions
+   ============================================================================= */
+.export-modal-content {
+    width: 680px;
+    max-width: 90vw;
+}
+
+/* Tab bar */
+.export-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(0,0,0,0.15);
+}
+
+.export-tab-btn {
+    flex: 1;
+    padding: 10px 0;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.export-tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.04);
+}
+
+.export-tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+/* Tab panels */
+.export-tab-panel {
+    display: none;
+}
+
+.export-tab-panel.active {
+    display: block;
+}
+
+.export-body {
+    padding: 12px 18px 16px;
+}
+
+/* Control rows */
+.export-controls-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.export-controls-row .control-group {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.export-controls-row input[type="number"] {
+    width: 100%;
+}
+
+/* Action row (buttons) */
+.export-action-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+}
+
+.btn-outline:hover {
+    background: var(--accent);
+    color: #000;
+}
+
+/* Preview area */
+.export-preview {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.export-preview img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+.export-preview-placeholder {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.export-loading {
+    color: var(--accent);
+    font-size: 12px;
+}
+
+.export-error {
+    color: #ff6b6b;
+    font-size: 12px;
+    padding: 12px;
+}
+
+/* Export button position (below settings) */
+#btn-export {
+    position: absolute;
+    right: 12px;
+    z-index: 5;
+}
+
+/* =============================================================================
+   Venn Diagram Panel
+   ============================================================================= */
+.venn-section {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.venn-section:last-of-type {
+    border-bottom: none;
+}
+
+.venn-section h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--accent);
+    margin-bottom: 8px;
+}
+
+.venn-hint {
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: normal;
+}
+
+.venn-dim-checkboxes {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.venn-dim-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.venn-dim-label input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+}
+
+.venn-dim-label.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+#venn-filter-section .control-group,
+#venn-circles-section .control-group {
+    margin-bottom: 6px;
+}
+
+/* Make export modal wider when Venn is shown to accommodate content */
+.export-modal-content {
+    max-height: 90vh;
+}
