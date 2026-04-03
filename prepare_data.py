@@ -54,7 +54,7 @@ FS_COLOR_LUT = os.path.join(BIDS_ROOT, "code", "FreeSurferColorLUT.txt")
 TASK = "LexicalNoDelay"
 BAND = "highgamma"
 REFERENCE = "car"
-PHASES = ["Cue", "Stimulus", "Response"]
+PHASES = ["Cue", "Stimulus", "Delay", "Response"]
 CONDITIONS = ["Decision", "Passive", "Repeat"]
 DIFF_TYPES = {
     "condition": {
@@ -751,6 +751,7 @@ def _build_sig_mask(all_ch_names: List[str], n_times: int,
     stat_windows = {
         'Cue':      (0.0, 0.75),
         'Stimulus': (0.0, 0.75),
+        'Delay':    (0.0, 0.5),
         'Response': (-0.5, 0.5),
     }
     offset = 0
