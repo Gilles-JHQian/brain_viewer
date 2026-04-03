@@ -375,6 +375,7 @@ class DataManager {
         const phaseTimeDefaults = {
             'Cue':      { min: 0.0, max: 0.75 },
             'Stimulus': { min: 0.0, max: 0.75 },
+            'Delay':    { min: 0.0, max: 0.5 },
             'Response': { min: -0.5, max: 0.5 },
         };
         const phases = this.metadata.phases;
