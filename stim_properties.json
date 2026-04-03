@@ -1,0 +1,674 @@
+{
+  "boreb": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "boril": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "davel": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "devim": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "folip": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "galef": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "galem": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "gapel": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "givel": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "havel": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "helic": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "herib": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "janep": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "japel": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "jokeb": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "jokel": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "jural": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "kelic": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "lakeb": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "likel": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "lipit": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "lomic": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "lorib": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "mafil": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "majil": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "molec": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "nomel": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "nosen": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "polec": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "ronic": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "tamic": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "tanic": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "tavin": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "terib": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "tokez": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "toric": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "vagul": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "valuk": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "vanic": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "verem": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "vivit": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "zarin": {
+    "lexicality": "Nonword",
+    "neighborhood": "Low"
+  },
+  "banel": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "banic": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "belet": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "berin": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "beris": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "caris": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "casef": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "cazel": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "cobin": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "delin": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "fenid": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "galed": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "galel": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "gorel": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "halet": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "janem": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "kevil": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "labin": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "laken": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "lamin": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "levim": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "limid": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "maled": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "malim": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "maron": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "menon": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "minel": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "monit": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "navin": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "norel": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "novin": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "palil": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "pelen": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "ranis": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "revit": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "sanis": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "savin": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "solip": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "tacin": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "telen": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "tened": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "torel": {
+    "lexicality": "Nonword",
+    "neighborhood": "High"
+  },
+  "bagel": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "civic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "comic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "fatal": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "fetal": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "focal": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "forum": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "haven": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "havoc": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "hazel": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "humor": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "legal": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "level": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "libel": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "logic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "madam": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "magic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "manic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "mimic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "modem": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "mogul": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "nasal": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "natal": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "naval": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "novel": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "panic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "relic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "rival": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "sonar": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "sonic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "tidal": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "tonic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "topaz": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "topic": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "totem": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "tulip": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "venom": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "vigil": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "viral": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "vital": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "vocal": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "woman": {
+    "lexicality": "Word",
+    "neighborhood": "Low"
+  },
+  "bacon": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "baron": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "basin": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "bison": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "bonus": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "cabin": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "camel": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "civil": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "colon": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "comet": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "coral": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "demon": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "denim": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "facet": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "feral": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "latin": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "linen": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "mason": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "melon": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "merit": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "metal": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "minus": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "moral": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "panel": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "pedal": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "penal": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "peril": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "petal": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "pilot": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "rabid": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "rapid": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "rigid": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "robin": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "roman": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "salad": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "satin": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "serum": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "seven": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "siren": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "solid": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "tacit": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  },
+  "tenet": {
+    "lexicality": "Word",
+    "neighborhood": "High"
+  }
+}
