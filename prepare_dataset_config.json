@@ -10,7 +10,7 @@
   "data": {
     "task": "LexicalNoDelay",
     "band": "highgamma",
-    "reference": "car",
+    "references": ["car", "bipolar"],
     "phases": ["Cue", "Stimulus", "Delay", "Response"],
     "conditions": ["Decision", "Passive", "Repeat"],
     "diff_types": {
