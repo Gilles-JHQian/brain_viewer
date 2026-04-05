@@ -57,7 +57,7 @@ def _default_config() -> dict:
         "data": {
             "task": "LexicalNoDelay",
             "band": "highgamma",
-            "reference": "car",
+            "references": ["car", "bipolar"],
             "phases": ["Cue", "Stimulus", "Delay", "Response"],
             "conditions": ["Decision", "Passive", "Repeat"],
             "diff_types": {
@@ -140,7 +140,7 @@ def load_config(config_path: Optional[str] = None) -> dict:
 def apply_config(config: dict):
     global CONFIG, CONFIG_PATH
     global BIDS_ROOT, SUBJECTS_DIR, RECON_DIR, A2009S_CSV, FS_COLOR_LUT
-    global TASK, BAND, REFERENCE, PHASES, CONDITIONS, DIFF_TYPES
+    global TASK, BAND, REFERENCE, REFERENCES, PHASES, CONDITIONS, DIFF_TYPES
     global DERIVATIVES_ROOT, STATISTICS_ROOT, STIM_PROPERTIES_PATH, MESH_DECIMATE_TARGET
 
     CONFIG = config
@@ -167,7 +167,16 @@ def apply_config(config: dict):
 
     TASK = data_cfg.get("task", default_data["task"])
     BAND = data_cfg.get("band", default_data["band"])
-    REFERENCE = data_cfg.get("reference", default_data["reference"])
+    # Support both old "reference" (single) and new "references" (list)
+    if "references" in data_cfg:
+        REFERENCES = data_cfg["references"]
+    elif "reference" in data_cfg:
+        REFERENCES = [data_cfg["reference"]]
+    elif "references" in default_data:
+        REFERENCES = default_data["references"]
+    else:
+        REFERENCES = [default_data.get("reference", "car")]
+    REFERENCE = REFERENCES[0]  # initial default
     PHASES = data_cfg.get("phases", default_data["phases"])
     CONDITIONS = data_cfg.get("conditions", default_data["conditions"])
     DIFF_TYPES = data_cfg.get("diff_types", default_data["diff_types"])
@@ -184,6 +193,13 @@ def apply_config(config: dict):
 
 
 apply_config(load_config())
+
+
+def set_reference(ref: str):
+    """Switch the active reference and update dependent globals."""
+    global REFERENCE, DERIVATIVES_ROOT
+    REFERENCE = ref
+    DERIVATIVES_ROOT = os.path.join(BIDS_ROOT, f"derivatives/epoch({REFERENCE})")
 
 
 # =============================================================================
@@ -1395,27 +1411,37 @@ def prepare_metadata(output_dir: str):
     """
     print("\n=== Preparing metadata ===")
     
-    zscore_files = []
-    zscore_dir = os.path.join(output_dir, "zscore")
-    if os.path.exists(zscore_dir):
-        zscore_files = sorted([f for f in os.listdir(zscore_dir) if f.endswith('.json')])
-    
-    diff_files = {}
-    diff_dir = os.path.join(output_dir, "diff")
-    if os.path.exists(diff_dir):
-        for dtype in os.listdir(diff_dir):
-            dtype_dir = os.path.join(diff_dir, dtype)
-            if os.path.isdir(dtype_dir):
-                diff_files[dtype] = sorted([
-                    f for f in os.listdir(dtype_dir) if f.endswith('.json')
-                ])
+    # Collect available data per reference
+    available_data = {}
+    for ref in REFERENCES:
+        ref_dir = os.path.join(output_dir, ref)
+        zscore_files = []
+        zscore_dir = os.path.join(ref_dir, "zscore")
+        if os.path.exists(zscore_dir):
+            zscore_files = sorted([f for f in os.listdir(zscore_dir) if f.endswith('.json')])
+        
+        diff_files = {}
+        diff_dir = os.path.join(ref_dir, "diff")
+        if os.path.exists(diff_dir):
+            for dtype in os.listdir(diff_dir):
+                dtype_dir = os.path.join(diff_dir, dtype)
+                if os.path.isdir(dtype_dir):
+                    diff_files[dtype] = sorted([
+                        f for f in os.listdir(dtype_dir) if f.endswith('.json')
+                    ])
+        
+        available_data[ref] = {
+            "zscore": zscore_files,
+            "diff": diff_files,
+        }
     
     metadata = {
-        "version": "2.0",
+        "version": "3.0",
         "generated_by": "prepare_data.py",
         "task": TASK,
         "band": BAND,
-        "reference": REFERENCE,
+        "references": REFERENCES,
+        "reference": REFERENCES[0],
         "phases": PHASES,
         "conditions": CONDITIONS,
         "diff_types": {
@@ -1425,10 +1451,7 @@ def prepare_metadata(output_dir: str):
             }
             for dt, cfg in DIFF_TYPES.items()
         },
-        "available_data": {
-            "zscore": zscore_files,
-            "diff": diff_files,
-        },
+        "available_data": available_data,
     }
     
     save_json(metadata, os.path.join(output_dir, "metadata.json"), compact=False)
@@ -1485,31 +1508,40 @@ def main():
     print(f"Output dir:   {output_dir}")
     print(f"Task:         {TASK}")
     print(f"Band:         {BAND}")
-    print(f"Reference:    {REFERENCE}")
+    print(f"References:   {REFERENCES}")
     
     os.makedirs(output_dir, exist_ok=True)
     
-    # Step 1: Brain mesh
+    # Step 1: Brain mesh (shared across references)
     if not args.skip_mesh:
         prepare_brain_mesh(output_dir)
     
-    # Step 2: ROI atlas
+    # Step 2: ROI atlas (shared across references)
     if not args.skip_atlas:
         prepare_roi_atlas(output_dir)
     
-    # Step 3: Electrode metadata
-    if not args.skip_electrodes:
-        prepare_electrodes(output_dir)
+    # Step 3-5: Per-reference data (electrodes, zscore, diff)
+    for ref in REFERENCES:
+        print(f"\n{'=' * 50}")
+        print(f"Processing reference: {ref}")
+        print(f"{'=' * 50}")
+        set_reference(ref)
+        ref_output_dir = os.path.join(output_dir, ref)
+        os.makedirs(ref_output_dir, exist_ok=True)
+
+        # Step 3: Electrode metadata
+        if not args.skip_electrodes:
+            prepare_electrodes(ref_output_dir)
+
+        # Step 4: HGA zscore data
+        if not args.skip_zscore:
+            prepare_hga_zscore_data(ref_output_dir)
+
+        # Step 5: HGA diff data
+        if not args.skip_diff:
+            prepare_hga_diff_data(ref_output_dir)
     
-    # Step 4: HGA zscore data
-    if not args.skip_zscore:
-        prepare_hga_zscore_data(output_dir)
-    
-    # Step 5: HGA diff data
-    if not args.skip_diff:
-        prepare_hga_diff_data(output_dir)
-    
-    # Step 6: Metadata summary
+    # Step 6: Metadata summary (covers all references)
     prepare_metadata(output_dir)
     
     print(f"\n{'=' * 50}")
