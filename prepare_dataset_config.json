@@ -1,0 +1,46 @@
+{
+  "paths": {
+    "bids_root": "/cwork/jq81/cogan_lab_box/CoganLab/BIDS-1.0_LexicalDecRepNoDelay/BIDS",
+    "subjects_dir": "/hpc/home/jq81/cogan_lab/jq81/freesurfer/subjects",
+    "recon_dir": "/cwork/jq81/cogan_lab_box/ECoG_Recon",
+    "derivatives_root": null,
+    "statistics_root": null,
+    "stim_properties_path": "stim_properties.json"
+  },
+  "data": {
+    "task": "LexicalNoDelay",
+    "band": "highgamma",
+    "reference": "car",
+    "phases": ["Cue", "Stimulus", "Delay", "Response"],
+    "conditions": ["Decision", "Passive", "Repeat"],
+    "diff_types": {
+      "condition": {
+        "directions": ["DecRep", "RepDec"],
+        "needs_condition": false,
+        "condition_map": {
+          "DecRep": ["Decision", "Repeat"],
+          "RepDec": ["Repeat", "Decision"]
+        }
+      },
+      "lexicality": {
+        "directions": ["NwWd", "WdNw"],
+        "needs_condition": true,
+        "stim_type_map": {
+          "NwWd": ["Nonword", "Word"],
+          "WdNw": ["Word", "Nonword"]
+        },
+        "stats_rec_type": "stimType"
+      },
+      "neighborhood": {
+        "directions": ["HdLd", "LdHd"],
+        "needs_condition": true,
+        "stats_rec_type": "neighborhood",
+        "neighborhood_map": {
+          "HdLd": ["High", "Low"],
+          "LdHd": ["Low", "High"]
+        }
+      }
+    }
+  },
+  "mesh_decimate_target": 50000
+}
