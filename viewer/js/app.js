@@ -175,6 +175,7 @@ bash start_viewer.sh</pre>
             const phaseDefaults = {
                 'Cue':      { min: 0.0, max: 0.75 },
                 'Stimulus': { min: 0.0, max: 0.75 },
+                'Delay':    { min: 0.0, max: 0.5 },
                 'Response': { min: -0.5, max: 0.5 },
             };
             const defaults = phaseDefaults[phase];

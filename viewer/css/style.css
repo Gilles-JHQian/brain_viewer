@@ -188,6 +188,21 @@ body {
     flex-shrink: 0;
 }
 
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.checkbox-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
 .range-inputs {
     display: flex;
     align-items: center;

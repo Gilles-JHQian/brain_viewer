@@ -449,7 +449,7 @@ class UIControls {
     _populateSigGroupLists() {
         const selection = this.getSelection();
         const isDiff = selection.dataType === 'diff';
-        const phases = ['Cue', 'Stimulus', 'Response'];
+        const phases = ['Cue', 'Stimulus', 'Delay', 'Response'];
         const conditions = ['Decision', 'Passive', 'Repeat'];
 
         // Phase list (always shown)

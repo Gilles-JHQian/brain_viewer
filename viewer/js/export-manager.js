@@ -2,7 +2,7 @@
  * Export Manager — Batch export for HGA traces and brain plots.
  *
  * Provides a popup modal with two tabs:
- *   1. Trace Export: 2×2 grid (Stimulus,Response) × (Repeat,Decision) using Plotly subplots.
+ *   1. Trace Export: configurable phase×condition grid using Plotly subplots.
  *   2. Brain Plot Export: screenshot of the 3D brain with HGA-colored electrodes.
  *
  * Supports save-to-file and copy-to-clipboard.
@@ -30,6 +30,7 @@ class ExportManager {
         this.traceVenn = document.getElementById('export-trace-venn');
         this.traceVennDim = document.getElementById('export-trace-venn-dim');
         this.traceVennDimGroup = document.getElementById('trace-venn-dim-group');
+        this.tracePhasesContainer = document.getElementById('export-trace-phases');
         this.btnTraceGenerate = document.getElementById('btn-trace-generate');
         this.btnTraceSave = document.getElementById('btn-trace-save');
         this.btnTraceCopy = document.getElementById('btn-trace-copy');
@@ -158,9 +159,10 @@ class ExportManager {
     // =========================================================================
 
     /**
-     * Generate the 2×2 trace grid.
-     * For sig/zscore: rows = (Decision, Repeat), cols = (Stimulus, Response).
-     * For diff: same layout but with act/bsl overlay + diff panel (3 rows).
+     * Generate the trace grid.
+     * Phases are selected via checkboxes; conditions default to (Decision, Repeat).
+     * For sig/zscore: rows = conditions, cols = selected phases.
+     * For diff: same layout but with act/bsl overlay + diff panel (extra rows).
      */
     async _generateTraces() {
         this.btnTraceGenerate.disabled = true;
@@ -174,7 +176,13 @@ class ExportManager {
             const baseFilters = { ...filters, sigOnly: false };
             const baseFilteredNames = this.app.dataManager.getFilteredElectrodes(baseFilters).map(e => e.name);
 
-            const phases = ['Stimulus', 'Response'];
+            const phases = Array.from(this.tracePhasesContainer.querySelectorAll('input:checked')).map(cb => cb.value);
+            if (phases.length === 0) {
+                this.tracePreview.innerHTML = '<div class="export-error">Please select at least one phase.</div>';
+                this.btnTraceGenerate.disabled = false;
+                this.btnTraceGenerate.textContent = 'Generate';
+                return;
+            }
             const conditions = ['Decision', 'Repeat'];
             const isDiff = selection.dataType === 'diff';
 
@@ -1010,7 +1018,7 @@ class ExportManager {
         if (this.vennDimCondition.checked) vennDims.add('condition');
         if (this.vennDimDirection.checked) vennDims.add('direction');
 
-        const phases = metadata ? metadata.phases : ['Cue', 'Stimulus', 'Response'];
+        const phases = metadata ? metadata.phases : ['Cue', 'Stimulus', 'Delay', 'Response'];
         const conditions = metadata ? metadata.conditions : ['Decision', 'Passive', 'Repeat'];
         const config = metadata && isDiff ? metadata.diff_types[diffType] : null;
         const directions = config ? config.directions : [];

@@ -59,6 +59,7 @@
                     <select id="select-phase">
                         <option value="Cue">Cue</option>
                         <option value="Stimulus" selected>Stimulus</option>
+                        <option value="Delay">Delay</option>
                         <option value="Response">Response</option>
                     </select>
                 </div>
@@ -470,6 +471,17 @@
                         <div class="control-group checkbox-group" style="margin-top:16px;">
                             <input type="checkbox" id="export-trace-yauto" checked>
                             <label for="export-trace-yauto">Auto Y-axis</label>
+                        </div>
+                    </div>
+                    <div class="export-controls-row">
+                        <div class="control-group">
+                            <label>Phases</label>
+                            <div id="export-trace-phases" class="checkbox-row">
+                                <label><input type="checkbox" value="Cue"> Cue</label>
+                                <label><input type="checkbox" value="Stimulus" checked> Stimulus</label>
+                                <label><input type="checkbox" value="Delay" checked> Delay</label>
+                                <label><input type="checkbox" value="Response" checked> Response</label>
+                            </div>
                         </div>
                     </div>
                     <div class="export-controls-row">

@@ -37,7 +37,7 @@ warnings.filterwarnings("ignore")
 # =============================================================================
 # Configuration
 # =============================================================================
-BIDS_ROOT = "/hpc/home/jq81/work/cogan_lab_box/CoganLab/BIDS-1.0_LexicalDecRepNoDelay/BIDS"
+BIDS_ROOT = "/cwork/jq81/cogan_lab_box/CoganLab/BIDS-1.0_LexicalDecRepNoDelay/BIDS"
 SUBJECTS_DIR = os.environ.get(
     "SUBJECTS_DIR",
     "/hpc/home/jq81/cogan_lab/jq81/freesurfer/subjects"
@@ -45,7 +45,7 @@ SUBJECTS_DIR = os.environ.get(
 # Individual-subject FreeSurfer reconstructions (for talairach transforms)
 RECON_DIR = os.environ.get(
     "RECON_DIR",
-    "/hpc/home/jq81/work/cogan_lab_box/ECoG_Recon"
+    "/cwork/jq81/cogan_lab_box/ECoG_Recon"
 )
 A2009S_CSV = os.path.join(BIDS_ROOT, "code", "a2009s.csv")
 FS_COLOR_LUT = os.path.join(BIDS_ROOT, "code", "FreeSurferColorLUT.txt")
@@ -54,7 +54,7 @@ FS_COLOR_LUT = os.path.join(BIDS_ROOT, "code", "FreeSurferColorLUT.txt")
 TASK = "LexicalNoDelay"
 BAND = "highgamma"
 REFERENCE = "car"
-PHASES = ["Cue", "Stimulus", "Response"]
+PHASES = ["Cue", "Stimulus", "Delay", "Response"]
 CONDITIONS = ["Decision", "Passive", "Repeat"]
 DIFF_TYPES = {
     "condition": {
@@ -751,6 +751,7 @@ def _build_sig_mask(all_ch_names: List[str], n_times: int,
     stat_windows = {
         'Cue':      (0.0, 0.75),
         'Stimulus': (0.0, 0.75),
+        'Delay':    (0.0, 0.5),
         'Response': (-0.5, 0.5),
     }
     offset = 0
