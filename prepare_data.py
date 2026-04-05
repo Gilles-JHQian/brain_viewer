@@ -8,7 +8,7 @@ directory to your local machine.
 
 Usage:
     conda activate Lexical_NoDelay
-    python prepare_data.py [--output-dir OUTPUT_DIR]
+    python prepare_data.py [--output-dir OUTPUT_DIR] [--config CONFIG_JSON]
 
 Author: Assistant
 Date: 2026-03-04
@@ -20,6 +20,7 @@ import json
 import math
 import argparse
 import warnings
+import copy
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple
@@ -35,64 +36,154 @@ from tqdm import tqdm
 warnings.filterwarnings("ignore")
 
 # =============================================================================
-# Configuration
+# Configuration handling
 # =============================================================================
-BIDS_ROOT = "/cwork/jq81/cogan_lab_box/CoganLab/BIDS-1.0_LexicalDecRepNoDelay/BIDS"
-SUBJECTS_DIR = os.environ.get(
-    "SUBJECTS_DIR",
-    "/hpc/home/jq81/cogan_lab/jq81/freesurfer/subjects"
-)
-# Individual-subject FreeSurfer reconstructions (for talairach transforms)
-RECON_DIR = os.environ.get(
-    "RECON_DIR",
-    "/cwork/jq81/cogan_lab_box/ECoG_Recon"
-)
-A2009S_CSV = os.path.join(BIDS_ROOT, "code", "a2009s.csv")
-FS_COLOR_LUT = os.path.join(BIDS_ROOT, "code", "FreeSurferColorLUT.txt")
+SCRIPT_DIR = os.path.dirname(__file__)
+DEFAULT_CONFIG_PATH = os.path.join(SCRIPT_DIR, "prepare_dataset_config.json")
+CONFIG: Dict[str, object] = {}
+CONFIG_PATH: Optional[str] = None
 
-# Data parameters
-TASK = "LexicalNoDelay"
-BAND = "highgamma"
-REFERENCE = "car"
-PHASES = ["Cue", "Stimulus", "Delay", "Response"]
-CONDITIONS = ["Decision", "Passive", "Repeat"]
-DIFF_TYPES = {
-    "condition": {
-        "directions": ["DecRep", "RepDec"],
-        "needs_condition": False,
-        "condition_map": {
-            "DecRep": ("Decision", "Repeat"),
-            "RepDec": ("Repeat", "Decision"),
-        },
-    },
-    "lexicality": {
-        "directions": ["NwWd", "WdNw"],
-        "needs_condition": True,
-        "stim_type_map": {
-            "NwWd": ("Nonword", "Word"),
-            "WdNw": ("Word", "Nonword"),
-        },
-        # Used for statistics file lookup (backend still calls it stimType)
-        "stats_rec_type": "stimType",
-    },
-    "neighborhood": {
-        "directions": ["HdLd", "LdHd"],
-        "needs_condition": True,
-        "stats_rec_type": "neighborhood",
-        "neighborhood_map": {
-            "HdLd": ("High", "Low"),
-            "LdHd": ("Low", "High"),
-        },
-    },
-}
 
-# Epoch derivatives root
-DERIVATIVES_ROOT = os.path.join(BIDS_ROOT, f"derivatives/epoch({REFERENCE})")
-STATISTICS_ROOT = os.path.join(BIDS_ROOT, "derivatives/statistics")
-STIM_PROPERTIES_PATH = os.path.join(os.path.dirname(__file__), 'stim_properties.json')
+def _default_config() -> dict:
+    return {
+        "paths": {
+            "bids_root": "/cwork/jq81/cogan_lab_box/CoganLab/BIDS-1.0_LexicalDecRepNoDelay/BIDS",
+            "subjects_dir": "/hpc/home/jq81/cogan_lab/jq81/freesurfer/subjects",
+            "recon_dir": "/cwork/jq81/cogan_lab_box/ECoG_Recon",
+            "derivatives_root": None,
+            "statistics_root": None,
+            "stim_properties_path": "stim_properties.json",
+        },
+        "data": {
+            "task": "LexicalNoDelay",
+            "band": "highgamma",
+            "reference": "car",
+            "phases": ["Cue", "Stimulus", "Delay", "Response"],
+            "conditions": ["Decision", "Passive", "Repeat"],
+            "diff_types": {
+                "condition": {
+                    "directions": ["DecRep", "RepDec"],
+                    "needs_condition": False,
+                    "condition_map": {
+                        "DecRep": ["Decision", "Repeat"],
+                        "RepDec": ["Repeat", "Decision"],
+                    },
+                },
+                "lexicality": {
+                    "directions": ["NwWd", "WdNw"],
+                    "needs_condition": True,
+                    "stim_type_map": {
+                        "NwWd": ["Nonword", "Word"],
+                        "WdNw": ["Word", "Nonword"],
+                    },
+                    # Used for statistics file lookup (backend still calls it stimType)
+                    "stats_rec_type": "stimType",
+                },
+                "neighborhood": {
+                    "directions": ["HdLd", "LdHd"],
+                    "needs_condition": True,
+                    "stats_rec_type": "neighborhood",
+                    "neighborhood_map": {
+                        "HdLd": ["High", "Low"],
+                        "LdHd": ["Low", "High"],
+                    },
+                },
+            },
+        },
+        "mesh_decimate_target": 50000,
+    }
 
-# Mesh decimation target (vertices per hemisphere)
-MESH_DECIMATE_TARGET = 50000
+
+DEFAULT_CONFIG_TEMPLATE = _default_config()
+
+
+def _deep_update(base: dict, updates: dict) -> dict:
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_update(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def _resolve_path(path_value: Optional[str]) -> Optional[str]:
+    if path_value in (None, ""):
+        return None
+    expanded = os.path.expanduser(os.path.expandvars(path_value))
+    if os.path.isabs(expanded):
+        return expanded
+    return os.path.abspath(os.path.join(SCRIPT_DIR, expanded))
+
+
+def load_config(config_path: Optional[str] = None) -> dict:
+    config = copy.deepcopy(DEFAULT_CONFIG_TEMPLATE)
+    path = config_path or DEFAULT_CONFIG_PATH
+    used_path = os.path.abspath(path) if path else None
+    if path and os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                overrides = json.load(f)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Failed to parse config file {path}: {exc}") from exc
+        _deep_update(config, overrides)
+    else:
+        if path:
+            warnings.warn(f"Config file {path} not found. Falling back to defaults.")
+    paths = config.get("paths", {})
+    for key in list(paths.keys()):
+        paths[key] = _resolve_path(paths[key])
+    config["paths"] = paths
+    config["_source_path"] = used_path if (path and os.path.exists(path)) else None
+    return config
+
+
+def apply_config(config: dict):
+    global CONFIG, CONFIG_PATH
+    global BIDS_ROOT, SUBJECTS_DIR, RECON_DIR, A2009S_CSV, FS_COLOR_LUT
+    global TASK, BAND, REFERENCE, PHASES, CONDITIONS, DIFF_TYPES
+    global DERIVATIVES_ROOT, STATISTICS_ROOT, STIM_PROPERTIES_PATH, MESH_DECIMATE_TARGET
+
+    CONFIG = config
+    CONFIG_PATH = config.get("_source_path")
+
+    defaults = DEFAULT_CONFIG_TEMPLATE
+    paths = config.get("paths", {})
+    data_cfg = config.get("data", {})
+    default_paths = defaults.get("paths", {})
+    default_data = defaults.get("data", {})
+
+    bids_root_value = paths.get("bids_root") or default_paths["bids_root"]
+    subjects_value = paths.get("subjects_dir") or os.environ.get("SUBJECTS_DIR") or default_paths["subjects_dir"]
+    recon_value = paths.get("recon_dir") or os.environ.get("RECON_DIR") or default_paths["recon_dir"]
+    derivatives_value = paths.get("derivatives_root")
+    statistics_value = paths.get("statistics_root")
+    stim_props_value = paths.get("stim_properties_path") or default_paths["stim_properties_path"]
+
+    BIDS_ROOT = _resolve_path(bids_root_value)
+    SUBJECTS_DIR = _resolve_path(subjects_value)
+    RECON_DIR = _resolve_path(recon_value)
+    DERIVATIVES_ROOT = _resolve_path(derivatives_value) if derivatives_value else None
+    STATISTICS_ROOT = _resolve_path(statistics_value) if statistics_value else None
+
+    TASK = data_cfg.get("task", default_data["task"])
+    BAND = data_cfg.get("band", default_data["band"])
+    REFERENCE = data_cfg.get("reference", default_data["reference"])
+    PHASES = data_cfg.get("phases", default_data["phases"])
+    CONDITIONS = data_cfg.get("conditions", default_data["conditions"])
+    DIFF_TYPES = data_cfg.get("diff_types", default_data["diff_types"])
+
+    if DERIVATIVES_ROOT is None:
+        DERIVATIVES_ROOT = os.path.join(BIDS_ROOT, f"derivatives/epoch({REFERENCE})")
+    if STATISTICS_ROOT is None:
+        STATISTICS_ROOT = os.path.join(BIDS_ROOT, "derivatives/statistics")
+
+    A2009S_CSV = os.path.join(BIDS_ROOT, "code", "a2009s.csv")
+    FS_COLOR_LUT = os.path.join(BIDS_ROOT, "code", "FreeSurferColorLUT.txt")
+    STIM_PROPERTIES_PATH = _resolve_path(stim_props_value) or os.path.join(SCRIPT_DIR, "stim_properties.json")
+    MESH_DECIMATE_TARGET = int(config.get("mesh_decimate_target", defaults["mesh_decimate_target"]))
+
+
+apply_config(load_config())
 
 
 # =============================================================================
@@ -1357,6 +1448,10 @@ def main():
         help="Output directory for viewer data (default: ../../brain_viewer_data)"
     )
     parser.add_argument(
+        "--config", type=str, default=DEFAULT_CONFIG_PATH,
+        help="Path to JSON config file (default: %(default)s)"
+    )
+    parser.add_argument(
         "--skip-mesh", action="store_true",
         help="Skip brain mesh generation"
     )
@@ -1378,6 +1473,7 @@ def main():
     )
     
     args = parser.parse_args()
+    apply_config(load_config(args.config))
     output_dir = os.path.abspath(args.output_dir)
     
     print(f"Brain Viewer Data Preparation")
@@ -1385,6 +1481,7 @@ def main():
     print(f"BIDS root:    {BIDS_ROOT}")
     print(f"Subjects dir: {SUBJECTS_DIR}")
     print(f"Recon dir:    {RECON_DIR}")
+    print(f"Config file:  {CONFIG_PATH or 'embedded defaults'}")
     print(f"Output dir:   {output_dir}")
     print(f"Task:         {TASK}")
     print(f"Band:         {BAND}")
