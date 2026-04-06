@@ -123,10 +123,15 @@ class BrainViewerApp {
   brain_viewer_data/
     metadata.json
     brain_mesh.json
-    electrodes.json
     roi_atlas.json
-    sig/
-    diff/</pre>
+    car/
+      electrodes.json
+      zscore/
+      diff/
+    bipolar/
+      electrodes.json
+      zscore/
+      diff/</pre>
                 <p>Then run:</p>
                 <pre>cd viewer
 bash start_viewer.sh</pre>
