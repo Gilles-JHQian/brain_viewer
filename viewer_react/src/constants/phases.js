@@ -1,26 +1,31 @@
-export const PHASES = ['encoding', 'maintenance', 'probe', 'response'];
+// Default / fallback phase configuration.
+//
+// The live phase list is CONFIG-DRIVEN: applyPhaseConfig() (see ./phaseConfig.js)
+// rewrites these exports IN PLACE from manifest.metadata.phases at bootstrap, so every
+// live `import { PHASES }` binding reflects the dataset's actual phases. The values
+// below are only the fallback used before a manifest loads (or if it omits phases).
+//
+// brain_viewer default = stimulus / delay / response. Adding a phase (e.g. Cue) is a
+// pipeline/manifest change — no code edit needed here.
+export const PHASES = ['stimulus', 'delay', 'response'];
 
 export const PHASE_LABELS = {
-  encoding: 'Encoding',
-  maintenance: 'Maintenance',
-  probe: 'Probe',
+  stimulus: 'Stimulus',
+  delay: 'Delay',
   response: 'Response',
 };
 
-export const DEFAULT_VENN_PHASES = ['encoding', 'maintenance', 'probe'];
+export const DEFAULT_VENN_PHASES = ['stimulus', 'delay', 'response'];
 
-export const PHASE_TIME_START = {
-  encoding: -1,
-  maintenance: -1,
-  probe: -1,
-  response: -1,
-};
+// Per-phase start time (seconds). Overridden from data/manifest by applyPhaseConfig.
+export const PHASE_TIME_START = {};
 
 export const phaseTimeStart = (phase) => PHASE_TIME_START[phase] ?? -1;
 
+// Relative column widths for the bottom waveform strip. Defaults to even; a manifest
+// may supply metadata.phase_width_ratios to weight phases by duration.
 export const PHASE_WIDTH_RATIOS = {
-  encoding: 10,
-  maintenance: 5,
-  probe: 4,
-  response: 3,
+  stimulus: 1,
+  delay: 1,
+  response: 1,
 };

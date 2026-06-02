@@ -1,10 +1,5 @@
 import { PHASES, phaseTimeStart } from '../constants/phases.js';
-import {
-  ENCODING_LOAD_CUTOFFS,
-  LOAD_OPTIONS,
-  PHASE_TIME_END,
-  PHASE_TIME_RANGES,
-} from '../constants/loads.js';
+import { LOAD_OPTIONS, PHASE_TIME_RANGES } from '../constants/loads.js';
 import { hexToRgba, phaseColor } from '../constants/colors.js';
 import { loadKey } from './hga.js';
 
@@ -27,10 +22,8 @@ export function interpolateTraceValue(trace, time) {
 
 function makeTrace(electrode, phase, selectedLoad = 'all') {
   const phaseIndex = PHASES.indexOf(phase);
-  let end = PHASE_TIME_END[phase];
-  if (phase === 'encoding' && selectedLoad !== 'all') {
-    end = ENCODING_LOAD_CUTOFFS[loadKey(selectedLoad)] ?? end;
-  }
+  const range = PHASE_TIME_RANGES[phase] ?? { min: -1, max: 2 };
+  const end = range.max;
   const start = phaseTimeStart(phase);
   const n = Math.max(60, Math.round((end - start) * 40));
   const active = electrode.phase_flags?.[phase];
@@ -50,7 +43,7 @@ function averageLoadTraces(phaseTraces) {
   if (loads.length === 0) return null;
   if (loads.length === 1) {
     const trace = phaseTraces[loads[0]];
-    return { time: trace.time, value: trace.value };
+    return { time: trace.time, value: trace.value, sem: trace.sem ?? null };
   }
   const timeSet = new Set();
   loads.forEach((load) => phaseTraces[load].time.forEach((time) => timeSet.add(time)));
@@ -143,7 +136,7 @@ export function resolvePanelPhaseTrace(traces, electrodes, phase, selectedLoad, 
 
 export function clipTraceToPhaseWindow(trace, phase) {
   if (!trace?.x?.length) return { x: [], y: [], upper: [], lower: [], sem: [] };
-  const { min, max } = PHASE_TIME_RANGES[phase];
+  const { min, max } = PHASE_TIME_RANGES[phase] ?? { min: -Infinity, max: Infinity };
   const clipped = { x: [], y: [], upper: [], lower: [], sem: [] };
   trace.x.forEach((time, index) => {
     if (time >= min && time <= max) {

@@ -1,21 +1,15 @@
-import { PHASES, phaseTimeStart } from './phases.js';
+// NOTE: brain_viewer has no Sternberg-style "load" dimension. LOAD_OPTIONS is retained
+// only so the legacy top-bar chip keeps compiling; it is repurposed into the orthogonal
+// variant selectors (reference/datatype/condition) in a later slice. The Sternberg
+// load-cutoff trace windowing (ENCODING_LOAD_CUTOFFS / PHASE_TIME_END) has been removed —
+// per-phase display windows now come from the data/manifest via applyPhaseConfig.
+export const LOAD_OPTIONS = ['all'];
 
-export const LOAD_OPTIONS = ['3', '5', '7', '9', 'all'];
-
-export const ENCODING_LOAD_CUTOFFS = {
-  load3: 2.8,
-  load5: 4.6,
-  load7: 6.7,
-  load9: 8.7,
+// Per-phase display window {min, max} in seconds. These defaults are placeholders;
+// applyPhaseConfig() (see ./phaseConfig.js) overwrites this object IN PLACE from
+// manifest.metadata.phase_time_ranges (ultimately each phase file's own `times`).
+export const PHASE_TIME_RANGES = {
+  stimulus: { min: -1, max: 2 },
+  delay: { min: -1, max: 3.5 },
+  response: { min: -1, max: 2 },
 };
-
-export const PHASE_TIME_END = {
-  encoding: Math.max(...Object.values(ENCODING_LOAD_CUTOFFS)),
-  maintenance: 3.5,
-  probe: 2.0,
-  response: 2.0,
-};
-
-export const PHASE_TIME_RANGES = Object.fromEntries(
-  PHASES.map((phase) => [phase, { min: phaseTimeStart(phase), max: PHASE_TIME_END[phase] }]),
-);

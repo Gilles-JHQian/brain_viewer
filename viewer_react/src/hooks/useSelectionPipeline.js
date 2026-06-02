@@ -7,8 +7,8 @@ export default function useSelectionPipeline({
   subjectFilteredElectrodes,
   electrodeById,
 }) {
-  const [vennPhases, setVennPhases] = useState(DEFAULT_VENN_PHASES);
-  const [selectedRegionIds, setSelectedRegionIds] = useState(['encoding_maintenance_probe']);
+  const [vennPhases, setVennPhases] = useState(() => [...DEFAULT_VENN_PHASES]);
+  const [selectedRegionIds, setSelectedRegionIds] = useState(() => [DEFAULT_VENN_PHASES.join('_')]);
   const [selectedElectrodeId, setSelectedElectrodeId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [disabledRois, setDisabledRois] = useState(() => new Set());
