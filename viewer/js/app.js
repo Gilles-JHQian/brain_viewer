@@ -123,10 +123,15 @@ class BrainViewerApp {
   brain_viewer_data/
     metadata.json
     brain_mesh.json
-    electrodes.json
     roi_atlas.json
-    sig/
-    diff/</pre>
+    car/
+      electrodes.json
+      zscore/
+      diff/
+    bipolar/
+      electrodes.json
+      zscore/
+      diff/</pre>
                 <p>Then run:</p>
                 <pre>cd viewer
 bash start_viewer.sh</pre>
@@ -366,6 +371,40 @@ bash start_viewer.sh</pre>
         if (this.brainMeshData && this.roiAtlasData) {
             this.renderer.buildBrainMesh(this.brainMeshData, this.roiAtlasData);
         }
+    }
+
+    // =========================================================================
+    // Reference switching
+    // =========================================================================
+
+    /**
+     * Switch between reference systems (e.g. CAR / bipolar).
+     * Reloads electrodes, rebuilds the 3D scene, and refreshes HGA data.
+     * @param {string} ref - Reference key (e.g. 'car', 'bipolar')
+     */
+    async switchReference(ref) {
+        console.log(`Switching reference to: ${ref}`);
+
+        // Update data manager
+        this.dataManager.setReference(ref);
+
+        // Reload electrodes for the new reference
+        const electrodesData = await this.dataManager.loadElectrodes();
+        this.currentElectrodes = electrodesData.electrodes;
+
+        // Re-populate subject/ROI filters
+        this.ui.populateFromData(electrodesData, this.dataManager.metadata);
+
+        // Rebuild electrode spheres in 3D
+        this.renderer.buildElectrodes(this.currentElectrodes, this.dataManager);
+
+        // Re-apply settings (electrode radius, opacity, etc.)
+        this.settingsManager.applyAll();
+
+        // Reload HGA data and update filters/plots
+        await this.loadAndUpdateHGA();
+
+        this.ui.setStatus(`Switched to ${ref.toUpperCase()} reference`);
     }
 
     // =========================================================================

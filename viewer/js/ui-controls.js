@@ -7,6 +7,7 @@ class UIControls {
         this.app = app;
 
         // DOM elements - Data Type
+        this.selReference = document.getElementById('select-reference');
         this.selDataType = document.getElementById('select-data-type');
         this.selDiffType = document.getElementById('select-diff-type');
         this.selDiffDirection = document.getElementById('select-diff-direction');
@@ -98,6 +99,7 @@ class UIControls {
 
     _bindEvents() {
         // Data type changes
+        this.selReference.addEventListener('change', () => this._onReferenceChange());
         this.selDataType.addEventListener('change', () => this._onDataTypeChange());
         this.selDiffType.addEventListener('change', () => this._onDiffTypeChange());
         this.selDiffDirection.addEventListener('change', () => this._onSelectionChange());
@@ -163,6 +165,23 @@ class UIControls {
      * Populate dropdowns from loaded data.
      */
     populateFromData(electrodesData, metadata) {
+        // Reference dropdown (if metadata lists references)
+        if (metadata.references && metadata.references.length > 0) {
+            const refLabels = { car: 'CAR', bipolar: 'Bipolar' };
+            this.selReference.innerHTML = '';
+            for (const ref of metadata.references) {
+                const opt = document.createElement('option');
+                opt.value = ref;
+                opt.textContent = refLabels[ref] || ref;
+                this.selReference.appendChild(opt);
+            }
+            // Keep the current selection if it's still valid
+            const dm = this.app.dataManager;
+            if (dm && metadata.references.includes(dm.currentReference)) {
+                this.selReference.value = dm.currentReference;
+            }
+        }
+
         // Subjects (multi-select checkboxes)
         this._buildMultiSelectItems(
             this.subjectList,
@@ -223,6 +242,7 @@ class UIControls {
 
     getSelection() {
         return {
+            reference: this.selReference.value,
             dataType: this.selDataType.value,
             diffType: this.selDiffType.value,
             direction: this.selDiffDirection.value,
@@ -340,6 +360,15 @@ class UIControls {
     // =========================================================================
     // Event handlers
     // =========================================================================
+
+    async _onReferenceChange() {
+        this.showLoading('Switching reference...');
+        try {
+            await this.app.switchReference(this.selReference.value);
+        } finally {
+            this.hideLoading();
+        }
+    }
 
     _onDataTypeChange() {
         const isDiff = this.selDataType.value === 'diff';

@@ -78,8 +78,8 @@ fi
 if [ ! -f "data/brain_mesh.json" ]; then
     echo "[WARN] data/brain_mesh.json not found."
 fi
-if [ ! -f "data/electrodes.json" ]; then
-    echo "[WARN] data/electrodes.json not found."
+if [ ! -f "data/car/electrodes.json" ]; then
+    echo "[WARN] data/car/electrodes.json not found (default reference)."
 fi
 
 # -------------------------------------------------------------------

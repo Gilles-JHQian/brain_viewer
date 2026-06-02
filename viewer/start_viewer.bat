@@ -34,7 +34,7 @@ exit /b 1
 
 if not exist "data\metadata.json" echo [WARN] data\metadata.json not found.
 if not exist "data\brain_mesh.json" echo [WARN] data\brain_mesh.json not found.
-if not exist "data\electrodes.json" echo [WARN] data\electrodes.json not found.
+if not exist "data\car\electrodes.json" echo [WARN] data\car\electrodes.json not found (default reference).
 
 echo.
 echo Starting HTTP server on port %PORT%...

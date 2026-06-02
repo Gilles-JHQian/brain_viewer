@@ -12,6 +12,7 @@ class DataManager {
         this.electrodes = null;
         this.brainMesh = null;
         this.roiAtlas = null;
+        this.currentReference = 'car';
     }
 
     // =========================================================================
@@ -56,9 +57,32 @@ class DataManager {
     }
 
     async loadElectrodes() {
-        if (this.electrodes) return this.electrodes;
-        this.electrodes = await this._fetchJSON('electrodes.json');
+        const key = `electrodes_${this.currentReference}`;
+        if (this.electrodes && this.electrodes._ref === this.currentReference) return this.electrodes;
+        if (this.cache[key]) {
+            this.electrodes = this.cache[key];
+            return this.electrodes;
+        }
+        const data = await this._fetchJSON(`${this.currentReference}/electrodes.json`);
+        data._ref = this.currentReference;
+        this.cache[key] = data;
+        this.electrodes = data;
         return this.electrodes;
+    }
+
+    // =========================================================================
+    // Reference switching
+    // =========================================================================
+
+    /**
+     * Set the active reference scheme and invalidate reference-specific caches.
+     * @param {string} ref - 'car' or 'bipolar'
+     */
+    setReference(ref) {
+        if (ref === this.currentReference) return;
+        this.currentReference = ref;
+        // Invalidate electrode cache so next load fetches the right file
+        this.electrodes = null;
     }
 
     // =========================================================================
@@ -70,10 +94,10 @@ class DataManager {
      * Returns cached data if previously loaded.
      */
     async loadZscoreData(phase, condition) {
-        const key = `zscore/${phase}_${condition}`;
+        const key = `${this.currentReference}/zscore/${phase}_${condition}`;
         if (this.cache[key]) return this.cache[key];
 
-        const filename = `zscore/${phase}_${condition}.json`;
+        const filename = `${this.currentReference}/zscore/${phase}_${condition}.json`;
         try {
             const data = await this._fetchJSON(filename);
             this.cache[key] = data;
@@ -90,9 +114,9 @@ class DataManager {
     async loadDiffData(diffType, direction, phase, condition = null) {
         let filename;
         if (condition) {
-            filename = `diff/${diffType}/${direction}_${phase}_${condition}.json`;
+            filename = `${this.currentReference}/diff/${diffType}/${direction}_${phase}_${condition}.json`;
         } else {
-            filename = `diff/${diffType}/${direction}_${phase}.json`;
+            filename = `${this.currentReference}/diff/${diffType}/${direction}_${phase}.json`;
         }
 
         const key = filename;
