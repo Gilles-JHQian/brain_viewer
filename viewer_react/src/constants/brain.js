@@ -1,9 +1,11 @@
-export const BRAIN_MESH_URL = '/assets/cvs_avg35_pial.glb';
+export const BRAIN_MESH_URL = '/assets/brain_fsaverage.glb';
 
-export const BRAIN_MESH_CENTER = [0.803, -2.16, -3.09];
+// fsaverage pial centroid (see brain_fsaverage.meta.json). Used for the L/R hemisphere
+// split plane and as the default orbit target.
+export const BRAIN_MESH_CENTER = [0.394, -18.932, 14.314];
 export const BRAIN_HEMI_SPLIT_X = BRAIN_MESH_CENTER[0];
 
-export const BRAIN_ORBIT_TARGET = [-4, 8, -10];
+export const BRAIN_ORBIT_TARGET = BRAIN_MESH_CENTER;
 export const BRAIN_ORBIT_DISTANCE = 218;
 export const BRAIN_ORBIT_AZIMUTH_DEG = 118;
 export const BRAIN_ORBIT_ELEVATION_DEG = 28;
@@ -29,7 +31,7 @@ export const BRAIN_SCENE_BACKGROUND = '#ffffff';
 /** MNE Brain(..., cortex=(0.9, 0.9, 0.9)) */
 export const DEFAULT_BRAIN_COLOR = '#e6e6e6';
 export const DEFAULT_BRAIN_OPACITY = 0.1;
-export const DEFAULT_BRAIN_VIEW_MODE = 'kde';
+export const DEFAULT_BRAIN_VIEW_MODE = 'electrodes';
 export const DEFAULT_ELECTRODE_BRAIN_OPACITY = 0.3;
 export const DEFAULT_KDE_BRAIN_OPACITY = 0.9;
 export const KDE_ELECTRODE_MODE_MAX = 5000;
