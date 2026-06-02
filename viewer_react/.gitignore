@@ -1,0 +1,9 @@
+node_modules/
+dist/
+public/data/phase_overlap.json
+
+# viewer data + mesh binaries are generated (regenerate with ../build_viewer_assets.py)
+# and/or symlinked to brain_viewer_data/ — never committed.
+public/data/
+public/assets/*.glb
+public/assets/*.meta.json
