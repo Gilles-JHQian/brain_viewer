@@ -1,8 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Activity, Brain, Filter, HelpCircle, Info } from 'lucide-react';
+import { Activity, Brain, HelpCircle, Info } from 'lucide-react';
 import { PHASES } from './constants/phases.js';
 import { VENN_MAX_PHASES, VENN_MIN_PHASES } from './constants/venn.js';
-import { LOAD_OPTIONS } from './constants/loads.js';
 import { DEFAULT_BRAIN_VIEW_MODE } from './constants/brain.js';
 import usePhaseOverlapData from './hooks/usePhaseOverlapData.js';
 import useSelectionPipeline from './hooks/useSelectionPipeline.js';
@@ -14,10 +13,13 @@ import BrainViewer from './components/brain/BrainViewer.jsx';
 import DetailPanel from './components/detail/DetailPanel.jsx';
 import WaveformPanel from './components/waveform/WaveformPanel.jsx';
 import ViewerInitialLoadScreen from './components/layout/ViewerInitialLoadScreen.jsx';
+import VariantSelector from './components/layout/VariantSelector.jsx';
 import { getSelectionEmptyState } from './utils/selectionEmptyState.js';
 
 export default function App() {
-  const [selectedLoad, setSelectedLoad] = useState('all');
+  // brain_viewer has no Sternberg "load" axis; downstream components still take a
+  // selectedLoad prop, so it is pinned to 'all'.
+  const [selectedLoad] = useState('all');
   const [brainViewMode, setBrainViewMode] = useState(DEFAULT_BRAIN_VIEW_MODE);
   const [kdeFrameCacheStatus, setKdeFrameCacheStatus] = useState({ ready: true, progress: 1 });
   const [kdePreRenderToken, setKdePreRenderToken] = useState(0);
@@ -50,6 +52,10 @@ export default function App() {
     toggleSubject,
     selectAllSubjects,
     deselectAllSubjects,
+    variantSel,
+    variantOptions,
+    variantLoading,
+    updateVariant,
   } = usePhaseOverlapData();
 
   const {
@@ -174,19 +180,12 @@ export default function App() {
           <h1><Brain size={24} /> HGA Phase Overlap Viewer</h1>
         </div>
         <div className="topbar-controls">
-          <div className="load-selector" data-tour="load-selector">
-            <span className="load-selector-label"><Filter size={14} /> Load</span>
-            {LOAD_OPTIONS.map((load) => (
-              <button
-                key={load}
-                type="button"
-                className={selectedLoad === load ? 'load-chip active' : 'load-chip'}
-                onClick={() => setSelectedLoad(load)}
-              >
-                {load === 'all' ? 'All' : load}
-              </button>
-            ))}
-          </div>
+          <VariantSelector
+            selection={variantSel}
+            options={variantOptions}
+            loading={variantLoading}
+            onChange={updateVariant}
+          />
           <button
             type="button"
             className="tour-replay-btn"

@@ -128,6 +128,28 @@ h1 {
   color: #1e40af;
 }
 
+.variant-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.variant-loading {
+  display: inline-flex;
+  align-items: center;
+  color: #2563eb;
+}
+
+.spin {
+  animation: variant-spin 0.9s linear infinite;
+}
+
+@keyframes variant-spin {
+  to { transform: rotate(360deg); }
+}
+
 .dashboard {
   display: grid;
   grid-template-columns: minmax(320px, 380px) minmax(360px, 1fr) minmax(280px, 320px);
