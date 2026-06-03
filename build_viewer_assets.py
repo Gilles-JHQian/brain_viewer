@@ -122,6 +122,24 @@ def _exists(*path_parts):
     return os.path.isfile(os.path.join(*path_parts))
 
 
+def _phase_time_ranges(data_dir, references, conditions, phases):
+    """Read the actual {min,max} time window per phase from the first available
+    zscore phase file (drives trace clipping + animation extent on the client)."""
+    ranges = {}
+    for phase in phases:
+        for ref in references:
+            for cond in conditions:
+                fp = os.path.join(data_dir, ref, "zscore", f"{phase}_{cond}.json")
+                if os.path.isfile(fp):
+                    times = json.load(open(fp)).get("times") or []
+                    if times:
+                        ranges[phase] = {"min": float(times[0]), "max": float(times[-1])}
+                    break
+            if phase in ranges:
+                break
+    return ranges
+
+
 def build_manifest(data_dir, references, conditions, diff_types, phases,
                    brain_meta, mesh_rel="assets/brain_fsaverage.glb"):
     """Enumerate every available (ref x datatype x ...) variant -> per-phase files."""
@@ -181,6 +199,7 @@ def build_manifest(data_dir, references, conditions, diff_types, phases,
         "layout": "variant",
         "metadata": {
             "phases": phases,
+            "phase_time_ranges": _phase_time_ranges(data_dir, references, conditions, phases),
             "default_venn_phases": [p for p in DEFAULT_VENN_PHASES if p in phases],
             "references": references,
             "datatypes": ["zscore", "diff"],
