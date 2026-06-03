@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Activity, Brain, HelpCircle, Info } from 'lucide-react';
+import { Activity, Brain, Info } from 'lucide-react';
 import { PHASES } from './constants/phases.js';
 import { VENN_MAX_PHASES, VENN_MIN_PHASES } from './constants/venn.js';
 import { DEFAULT_BRAIN_VIEW_MODE } from './constants/brain.js';
@@ -184,10 +184,7 @@ export default function App() {
     <div className="app-shell">
       <div className="tour-welcome-anchor" data-tour="tour-welcome" aria-hidden="true" />
       <header className="topbar">
-        <div>
-          <div className="eyebrow">Neighborhood Sternberg</div>
-          <h1><Brain size={24} /> HGA Phase Overlap Viewer</h1>
-        </div>
+        <h1 className="topbar-title"><Brain size={20} /> HGA viewer</h1>
         <div className="topbar-controls">
           <VariantSelector
             spec={spec}
@@ -203,16 +200,6 @@ export default function App() {
             kdeMaxDistance={kdeMaxDistance}
             onKdeMaxDistance={setKdeMaxDistance}
           />
-          <button
-            type="button"
-            className="tour-replay-btn"
-            onClick={() => startTour({ force: true })}
-            title="Replay product tour"
-            disabled={isTourActive}
-          >
-            <HelpCircle size={14} />
-            Tour
-          </button>
         </div>
       </header>
 
