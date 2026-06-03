@@ -1,17 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DEFAULT_VENN_PHASES } from '../constants/phases.js';
+import { VENN_MAX_PHASES } from '../constants/venn.js';
 import { computeVennRegions } from '../utils/vennRegions.js';
 import { buildSelectionSummary } from '../utils/selectionSummary.js';
 
 export default function useSelectionPipeline({
   subjectFilteredElectrodes,
   electrodeById,
+  vennMembers = null,
 }) {
   const [vennPhases, setVennPhases] = useState(() => [...DEFAULT_VENN_PHASES]);
   const [selectedRegionIds, setSelectedRegionIds] = useState(() => [DEFAULT_VENN_PHASES.join('_')]);
   const [selectedElectrodeId, setSelectedElectrodeId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [disabledRois, setDisabledRois] = useState(() => new Set());
+
+  // When the Venn axis (phase vs condition) or its members change, reset the selected Venn
+  // circles to all available members (capped at the Venn's max circle count).
+  const membersKey = (vennMembers || []).join('|');
+  useEffect(() => {
+    if (!vennMembers?.length) return;
+    setVennPhases(vennMembers.slice(0, Math.min(vennMembers.length, VENN_MAX_PHASES)));
+  }, [membersKey]);
 
   const vennRegions = useMemo(
     () => computeVennRegions(subjectFilteredElectrodes, vennPhases),

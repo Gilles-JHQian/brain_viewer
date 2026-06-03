@@ -1,4 +1,4 @@
-import { applyPhaseConfig } from '../constants/phaseConfig.js';
+import { applyPhaseConfig, applyVennAxisConfig, vennAxisConfig } from '../constants/phaseConfig.js';
 import { attachPhaseFlags } from '../utils/phaseFlags.js';
 import { attachElectrodeHga } from '../utils/electrodeHga.js';
 
@@ -81,20 +81,35 @@ async function loadReferenceElectrodes(manifest, reference) {
 
 // Fetch each phase file once and return both the significance sets (for phase_flags) and
 // the raw payloads (for trace building).
-async function loadVariantPhasePayloads(variant, phases) {
-  const sigByPhase = {};
-  const phasePayloads = {};
-  await Promise.all(phases.map(async (phase) => {
-    const path = variant?.phaseFiles?.[phase];
-    if (!path) {
-      sigByPhase[phase] = new Set();
-      return;
+// Construct the data file path for one (phase, condition) of a variant spec, mirroring
+// build_viewer_assets.py's layout. `member` is a phase (axis='phase') or a condition
+// (axis='condition'); the other dimension is taken from the spec's fixed value.
+export function resolveVariantFile(spec, member, diffMeta) {
+  const { reference, datatype, diffType, direction, axis, fixedPhase, fixedCondition } = spec;
+  const phase = axis === 'condition' ? fixedPhase : member;
+  const condition = axis === 'condition' ? member : fixedCondition;
+  if (datatype === 'zscore') {
+    return `${reference}/zscore/${phase}_${condition}.json`;
+  }
+  const needsCond = diffMeta?.[diffType]?.needs_condition;
+  const suffix = needsCond && condition ? `_${condition}` : '';
+  return `${reference}/diff/${diffType}/${direction}_${phase}${suffix}.json`;
+}
+
+async function loadMemberPayloads(spec, members, diffMeta) {
+  const sigByMember = {};
+  const payloads = {};
+  await Promise.all(members.map(async (member) => {
+    const path = resolveVariantFile(spec, member, diffMeta);
+    try {
+      const payload = await fetchJson(`/data/${path}`);
+      payloads[member] = payload;
+      sigByMember[member] = new Set(payload.sig_channels || []);
+    } catch {
+      sigByMember[member] = new Set(); // combo may not exist; treat as no significance
     }
-    const payload = await fetchJson(`/data/${path}`);
-    phasePayloads[phase] = payload;
-    sigByPhase[phase] = new Set(payload.sig_channels || []);
   }));
-  return { sigByPhase, phasePayloads };
+  return { sigByMember, payloads };
 }
 
 // Resolve the [activeLabel, baselineLabel] pair for a diff direction from whichever map
@@ -141,24 +156,43 @@ function buildVariantTraces(phasePayloads, phases, labels = null) {
   return traces;
 }
 
-// Load everything needed to render one variant: adapted electrodes (with phase_flags for
-// this variant) and per-phase traces. Reused by bootstrap and by variant switching.
-export async function loadVariant(manifest, variantKey, phases) {
-  const variant = manifest?.variants?.[variantKey];
-  if (!variant) throw new Error(`Unknown variant: ${variantKey}`);
-  const reference = variant.reference;
-  const [rawElectrodes, { sigByPhase, phasePayloads }] = await Promise.all([
-    loadReferenceElectrodes(manifest, reference),
-    loadVariantPhasePayloads(variant, phases),
+// The members of the Venn/waveform for a spec: phases (axis='phase') or conditions
+// (axis='condition').
+export function specMembers(metadata, spec) {
+  return spec.axis === 'condition' ? (metadata.conditions || []) : (metadata.phases || []);
+}
+
+// A reasonable default spec: condition-overlap (Venn over conditions) at the first phase,
+// car reference, zscore. (User's primary interest is condition-modality overlap.)
+export function defaultVariantSpec(metadata) {
+  return {
+    reference: (metadata.references || ['car'])[0],
+    datatype: 'zscore',
+    diffType: null,
+    direction: null,
+    axis: 'condition',
+    fixedPhase: (metadata.phases || [])[0] ?? null,
+    fixedCondition: (metadata.conditions || [])[0] ?? null,
+  };
+}
+
+// Load everything needed to render one variant spec: adapted electrodes (with member
+// flags), per-member traces, and the HGA scale. `members` = phases or conditions per axis.
+export async function loadVariant(manifest, spec) {
+  const metadata = manifest?.metadata || {};
+  const diffMeta = metadata.diff_types || {};
+  const members = specMembers(metadata, spec);
+  const [rawElectrodes, { sigByMember, payloads }] = await Promise.all([
+    loadReferenceElectrodes(manifest, spec.reference),
+    loadMemberPayloads(spec, members, diffMeta),
   ]);
-  const flagged = attachPhaseFlags(rawElectrodes, sigByPhase, phases);
-  const labels = variant.datatype === 'diff'
-    ? diffDirectionLabels(manifest?.metadata?.diff_types?.[variant.diff_type], variant.direction)
+  const flagged = attachPhaseFlags(rawElectrodes, sigByMember, members);
+  const labels = spec.datatype === 'diff'
+    ? diffDirectionLabels(diffMeta[spec.diffType], spec.direction)
     : null;
-  const traces = buildVariantTraces(phasePayloads, phases, labels);
-  // Per-electrode HGA magnitude (drives sphere sizing + KDE source weights).
-  const { electrodes, hgaScale } = attachElectrodeHga(flagged, traces, phases);
-  return { variantKey, reference, electrodes, traces, hgaScale };
+  const traces = buildVariantTraces(payloads, members, labels);
+  const { electrodes, hgaScale } = attachElectrodeHga(flagged, traces, members);
+  return { spec, members, reference: spec.reference, electrodes, traces, hgaScale };
 }
 
 export async function loadViewerBootstrap({ onProgress } = {}) {
@@ -171,18 +205,18 @@ export async function loadViewerBootstrap({ onProgress } = {}) {
     const manifest = await fetchJson('/data/manifest.json');
     reportBootstrap('manifest', 1);
 
-    // brain_viewer variant layout: derive phase_flags + traces for the default variant.
+    // brain_viewer variant layout: derive member flags + traces for the default spec.
     if (manifest.layout === 'variant') {
-      applyPhaseConfig(manifest.metadata);
-      const phases = manifest.metadata.phases;
-      const variantKey = manifest.metadata.default_variant;
-      const { electrodes, traces, hgaScale } = await loadVariant(manifest, variantKey, phases);
+      const spec = defaultVariantSpec(manifest.metadata);
+      applyVennAxisConfig(vennAxisConfig(manifest.metadata, spec.axis, spec.fixedPhase));
+      const { electrodes, traces, hgaScale, members } = await loadVariant(manifest, spec);
       reportBootstrap('electrodes', 2);
       return {
         layout: 'variant',
         manifest,
         metadata: manifest.metadata,
-        activeVariant: variantKey,
+        activeSpec: spec,
+        members,
         electrodes,
         regions: [],
         traces,

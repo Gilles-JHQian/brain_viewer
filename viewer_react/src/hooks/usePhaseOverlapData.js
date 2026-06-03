@@ -3,7 +3,10 @@ import {
   loadTracesForSubjects,
   loadVariant,
   loadViewerBootstrap,
+  specMembers,
+  defaultVariantSpec,
 } from '../data/phaseOverlapStore.js';
+import { applyVennAxisConfig, vennAxisConfig } from '../constants/phaseConfig.js';
 
 const BOOTSTRAP_LOAD_WEIGHT = 0.15;
 const TRACES_LOAD_WEIGHT = 0.85;
@@ -13,31 +16,6 @@ const STAGE_LABELS = {
   electrodes: 'Loading electrode catalog…',
   traces: 'Loading HGA traces…',
 };
-
-// --- variant key <-> selection helpers (mirror build_viewer_assets.py::_variant_key) ---
-// zscore:  ref|zscore|<condition>
-// diff:    ref|diff|<diffType>|<direction>[|<condition>]   (condition only if needs_condition)
-export function buildVariantKey(sel, diffTypesMeta) {
-  if (!sel) return null;
-  if (sel.datatype === 'zscore') {
-    return [sel.reference, 'zscore', sel.condition].join('|');
-  }
-  const parts = [sel.reference, 'diff', sel.diffType, sel.direction];
-  if (diffTypesMeta?.[sel.diffType]?.needs_condition) parts.push(sel.condition);
-  return parts.join('|');
-}
-
-export function parseVariantKey(key, diffTypesMeta) {
-  const p = String(key).split('|');
-  const [reference, datatype] = p;
-  if (datatype === 'zscore') {
-    return { reference, datatype, condition: p[2], diffType: null, direction: null };
-  }
-  const diffType = p[2];
-  const direction = p[3];
-  const needsCond = diffTypesMeta?.[diffType]?.needs_condition;
-  return { reference, datatype, diffType, direction, condition: needsCond ? p[4] : null };
-}
 
 export default function usePhaseOverlapData() {
   const [bootstrap, setBootstrap] = useState(null);
@@ -59,8 +37,9 @@ export default function usePhaseOverlapData() {
   const [loadError, setLoadError] = useState(null);
   const [selectedSubjects, setSelectedSubjects] = useState(() => new Set());
 
-  // Variant (reference/datatype/diff/condition) selection + on-demand reload.
-  const [variantSel, setVariantSel] = useState(null);
+  // Variant spec ({reference,datatype,diffType,direction,axis,fixedPhase,fixedCondition})
+  // selection + on-demand reload.
+  const [spec, setSpec] = useState(null);
   const [variantData, setVariantData] = useState(null);
   const [variantLoading, setVariantLoading] = useState(false);
 
@@ -99,41 +78,46 @@ export default function usePhaseOverlapData() {
 
   const diffTypesMeta = metadata?.diff_types ?? {};
 
-  // Initialize variant selection from the manifest's default variant once available.
+  // Initialize the spec from the bootstrap's default once available.
   useEffect(() => {
-    if (!isVariantLayout || variantSel || !metadata?.default_variant) return;
-    setVariantSel(parseVariantKey(metadata.default_variant, diffTypesMeta));
-  }, [isVariantLayout, variantSel, metadata, diffTypesMeta]);
+    if (!isVariantLayout || spec || !metadata) return;
+    setSpec(bootstrap?.activeSpec ?? defaultVariantSpec(metadata));
+  }, [isVariantLayout, spec, metadata, bootstrap]);
 
-  // The current selection as a key, validated against the manifest's variant table.
-  const variantKey = useMemo(() => {
-    if (!isVariantLayout) return null;
-    const key = buildVariantKey(variantSel, diffTypesMeta);
-    if (key && manifest?.variants?.[key]) return key;
-    return metadata?.default_variant ?? null;
-  }, [isVariantLayout, variantSel, diffTypesMeta, manifest, metadata]);
+  // Venn/waveform members for the active axis (synchronous from spec — drives the
+  // selection pipeline reset and the in-place axis config below).
+  const vennMembers = useMemo(
+    () => (isVariantLayout && spec && metadata ? specMembers(metadata, spec) : []),
+    [isVariantLayout, spec, metadata],
+  );
 
-  const loadedVariantKey = variantData?.variantKey ?? bootstrap?.activeVariant ?? null;
+  const specKey = useMemo(() => (spec ? JSON.stringify(spec) : null), [spec]);
+  const loadedSpecKey = useMemo(() => {
+    const loaded = variantData?.spec ?? bootstrap?.activeSpec ?? null;
+    return loaded ? JSON.stringify(loaded) : null;
+  }, [variantData, bootstrap]);
 
-  // Reload electrodes + traces (with this variant's phase_flags) when the key changes.
+  // Reload electrodes + traces (with member flags) when the spec changes; reconfigure the
+  // axis members in place first so the Venn/waveform/animation render over the right members.
   useEffect(() => {
-    if (!isVariantLayout || !manifest || !variantKey) return undefined;
-    if (variantKey === loadedVariantKey) return undefined;
+    if (!isVariantLayout || !manifest || !spec) return undefined;
+    if (specKey === loadedSpecKey) return undefined;
     let cancelled = false;
+    applyVennAxisConfig(vennAxisConfig(metadata, spec.axis, spec.fixedPhase));
     setVariantLoading(true);
-    loadVariant(manifest, variantKey, metadata.phases)
+    loadVariant(manifest, spec)
       .then((result) => {
         if (!cancelled) setVariantData(result);
       })
       .catch((error) => {
-        console.error('Failed to load variant', variantKey, error);
+        console.error('Failed to load variant', spec, error);
         if (!cancelled) setLoadError(error?.message || 'Failed to load variant');
       })
       .finally(() => {
         if (!cancelled) setVariantLoading(false);
       });
     return () => { cancelled = true; };
-  }, [isVariantLayout, manifest, variantKey, loadedVariantKey, metadata]);
+  }, [isVariantLayout, manifest, spec, specKey, loadedSpecKey, metadata]);
 
   // Effective electrodes/traces: the switched variant if loaded, else the bootstrap default.
   const electrodes = useMemo(() => {
@@ -297,22 +281,35 @@ export default function usePhaseOverlapData() {
     setSelectedSubjects(new Set());
   };
 
-  // --- variant selector options + setters (consumed by the top-bar VariantSelector) ---
+  // A datatype carries a condition dimension (so condition-axis Venn is meaningful) when it
+  // is zscore, or a diff type that needs a condition. condition-diff has no condition dim.
+  const datatypeHasCondition = (datatype, diffType) => (
+    datatype === 'zscore' || !!diffTypesMeta?.[diffType]?.needs_condition
+  );
+
+  // --- variant selector options (consumed by the top-bar VariantSelector) ---
   const variantOptions = useMemo(() => {
-    if (!isVariantLayout || !metadata) return null;
+    if (!isVariantLayout || !metadata || !spec) return null;
+    const axes = datatypeHasCondition(spec.datatype, spec.diffType)
+      ? ['phase', 'condition']
+      : ['phase'];
     return {
       references: metadata.references ?? [],
       datatypes: metadata.datatypes ?? ['zscore', 'diff'],
       conditions: metadata.conditions ?? [],
+      phases: metadata.phases ?? [],
       diffTypes: Object.keys(diffTypesMeta),
       diffTypesMeta,
+      axes,
     };
-  }, [isVariantLayout, metadata, diffTypesMeta]);
+  }, [isVariantLayout, metadata, spec, diffTypesMeta]);
 
-  // Apply a partial change to the selection, filling sensible defaults so the resulting
-  // combination is valid (e.g. switching to diff picks a diff type + direction).
+  // Apply a partial change to the spec, filling defaults so the result is valid:
+  //  - switching to diff picks a diff type + direction (+ condition if needed)
+  //  - a datatype with no condition dim forces the phase axis
+  //  - switching axis ensures the fixed phase/condition are set
   const updateVariant = (patch) => {
-    setVariantSel((current) => {
+    setSpec((current) => {
       const next = { ...current, ...patch };
       if (next.datatype === 'diff') {
         if (!next.diffType || !diffTypesMeta[next.diffType]) {
@@ -320,13 +317,12 @@ export default function usePhaseOverlapData() {
         }
         const dirs = diffTypesMeta[next.diffType]?.directions ?? [];
         if (!dirs.includes(next.direction)) next.direction = dirs[0] ?? null;
-        if (diffTypesMeta[next.diffType]?.needs_condition && !next.condition) {
-          next.condition = metadata?.conditions?.[0] ?? null;
-        }
       }
-      if (next.datatype === 'zscore' && !next.condition) {
-        next.condition = metadata?.conditions?.[0] ?? null;
+      if (!datatypeHasCondition(next.datatype, next.diffType)) {
+        next.axis = 'phase';
       }
+      if (!next.fixedPhase) next.fixedPhase = metadata?.phases?.[0] ?? null;
+      if (!next.fixedCondition) next.fixedCondition = metadata?.conditions?.[0] ?? null;
       return next;
     });
   };
@@ -372,8 +368,8 @@ export default function usePhaseOverlapData() {
     selectAllSubjects,
     deselectAllSubjects,
     // variant selection
-    variantSel,
-    variantKey,
+    spec,
+    vennMembers,
     variantOptions,
     variantLoading,
     updateVariant,

@@ -12,13 +12,27 @@ export const ROI_COLORS = {
 
 export const INTERSECTION_COLOR = '#1e293b';
 
-export function phaseColor(phase) {
-  return {
-    encoding: '#ef4444',
-    maintenance: '#3b82f6',
-    probe: '#f59e0b',
-    response: '#10b981',
-  }[phase] || '#94a3b8';
+// Colors for Venn/waveform "members" — covers both phases and conditions so the
+// distinction holds whichever axis the Venn is on.
+const MEMBER_COLORS = {
+  // phases (brain_viewer)
+  Cue: '#a855f7',
+  Stimulus: '#ef4444',
+  Delay: '#3b82f6',
+  Response: '#10b981',
+  // conditions (task modalities)
+  Decision: '#ef4444',
+  Passive: '#3b82f6',
+  Repeat: '#f59e0b',
+  // legacy Sternberg phases (lowercase)
+  encoding: '#ef4444',
+  maintenance: '#3b82f6',
+  probe: '#f59e0b',
+  response: '#10b981',
+};
+
+export function phaseColor(member) {
+  return MEMBER_COLORS[member] || '#94a3b8';
 }
 
 export function electrodeColor(electrode) {

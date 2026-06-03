@@ -52,8 +52,8 @@ export default function App() {
     toggleSubject,
     selectAllSubjects,
     deselectAllSubjects,
-    variantSel,
-    variantKey,
+    spec,
+    vennMembers,
     variantOptions,
     variantLoading,
     updateVariant,
@@ -82,7 +82,7 @@ export default function App() {
     tableElectrodes,
     tableElectrodesKey,
     roiBarItems,
-  } = useSelectionPipeline({ subjectFilteredElectrodes, electrodeById });
+  } = useSelectionPipeline({ subjectFilteredElectrodes, electrodeById, vennMembers });
 
   const kdeRenderRequired = brainViewMode === 'kde';
 
@@ -182,7 +182,7 @@ export default function App() {
         </div>
         <div className="topbar-controls">
           <VariantSelector
-            selection={variantSel}
+            spec={spec}
             options={variantOptions}
             loading={variantLoading}
             onChange={updateVariant}
@@ -202,7 +202,10 @@ export default function App() {
 
       <main className="dashboard">
         <aside className="panel venn-panel">
-          <PanelTitle icon={<Activity size={18} />} title="Phase overlap selector" />
+          <PanelTitle
+            icon={<Activity size={18} />}
+            title={`${spec?.axis === 'condition' ? 'Condition' : 'Phase'} overlap selector`}
+          />
           <VennPanel
             vennPhases={vennPhases}
             regions={vennRegions}
@@ -286,13 +289,16 @@ export default function App() {
       </main>
 
       <section className="panel waveform-panel">
-        <PanelTitle icon={<Activity size={18} />} title="Per-phase HGA time courses" />
+        <PanelTitle
+          icon={<Activity size={18} />}
+          title={spec?.axis === 'condition' ? 'Per-condition HGA time courses' : 'Per-phase HGA time courses'}
+        />
         <WaveformPanel
           electrode={selectedElectrode}
           summary={selectedSummary}
           electrodes={tableElectrodes}
           traces={data.traces || {}}
-          variantKey={variantKey}
+          variantKey={spec ? JSON.stringify(spec) : 'v'}
           layout={data.layout}
           tracesLoading={tracesLoading}
           tracesLoadProgress={tracesLoadProgress}
