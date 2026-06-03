@@ -1,7 +1,9 @@
-/** Gaussian KDE on pial mesh — matches univarite.ipynb (bandwidth=5mm, max_distance=10mm). */
+/** Value-weighted Gaussian density on the pial mesh — matches
+ *  viz/plotters/hga_plotter.py::_compute_density_on_surface
+ *  (bandwidth=15mm Gaussian sigma, max_distance=30mm cutoff, weighted sum). */
 
-export const KDE_BANDWIDTH = 5.0;
-export const KDE_MAX_DISTANCE = 10.0;
+export const KDE_BANDWIDTH = 15.0;
+export const KDE_MAX_DISTANCE = 30.0;
 export const KDE_DENSITY_OPACITY = 0.9;
 export const KDE_PERCENTILE_MAX = 98;
 export const KDE_COLORMAP_STEPS = 256;
