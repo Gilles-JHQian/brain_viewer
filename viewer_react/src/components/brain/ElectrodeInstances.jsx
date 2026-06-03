@@ -16,6 +16,8 @@ export default function ElectrodeInstances({
   selectedElectrodeId,
   hoveredId,
   colorByFunctional,
+  colorMode = 'region',
+  sizeScale = 1,
   onHover,
   onSelect,
 }) {
@@ -39,7 +41,7 @@ export default function ElectrodeInstances({
       const radius = hgaToRadius(hgaMean, scale, { active, selected, hovered });
 
       tempObject.position.set(electrode.x, electrode.y, electrode.z);
-      tempObject.scale.setScalar(radius);
+      tempObject.scale.setScalar(radius * sizeScale);
       tempObject.updateMatrix();
       mesh.setMatrixAt(index, tempObject.matrix);
 
@@ -48,6 +50,8 @@ export default function ElectrodeInstances({
         vennPhases,
         selected,
         colorByFunctional,
+        colorMode,
+        hgaScale,
       }));
       mesh.setColorAt(index, color);
     });
@@ -65,6 +69,9 @@ export default function ElectrodeInstances({
     selectedElectrodeId,
     hoveredId,
     colorByFunctional,
+    colorMode,
+    hgaScale,
+    sizeScale,
     tempObject,
   ]);
 

@@ -331,10 +331,17 @@ export default function usePhaseOverlapData() {
     });
   };
 
+  // Surface the active variant's HGA scale to BrainViewer (it reads metadata.hga_size_scale).
+  const hgaScale = variantData?.hgaScale ?? bootstrap?.hgaScale ?? null;
+  const metadataForView = useMemo(
+    () => (metadata ? { ...metadata, hga_size_scale: hgaScale } : null),
+    [metadata, hgaScale],
+  );
+
   const data = useMemo(
     () => (bootstrap
       ? {
-        metadata,
+        metadata: metadataForView,
         electrodes,
         regions,
         traces,
@@ -342,7 +349,7 @@ export default function usePhaseOverlapData() {
         layout,
       }
       : null),
-    [bootstrap, metadata, electrodes, regions, traces, manifest, layout],
+    [bootstrap, metadataForView, electrodes, regions, traces, manifest, layout],
   );
 
   return {

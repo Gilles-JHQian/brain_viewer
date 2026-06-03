@@ -1,5 +1,6 @@
 import { applyPhaseConfig } from '../constants/phaseConfig.js';
 import { attachPhaseFlags } from '../utils/phaseFlags.js';
+import { attachElectrodeHga } from '../utils/electrodeHga.js';
 
 const TRACE_CACHE_MAX = 48;
 
@@ -150,12 +151,14 @@ export async function loadVariant(manifest, variantKey, phases) {
     loadReferenceElectrodes(manifest, reference),
     loadVariantPhasePayloads(variant, phases),
   ]);
-  const electrodes = attachPhaseFlags(rawElectrodes, sigByPhase, phases);
+  const flagged = attachPhaseFlags(rawElectrodes, sigByPhase, phases);
   const labels = variant.datatype === 'diff'
     ? diffDirectionLabels(manifest?.metadata?.diff_types?.[variant.diff_type], variant.direction)
     : null;
   const traces = buildVariantTraces(phasePayloads, phases, labels);
-  return { variantKey, reference, electrodes, traces };
+  // Per-electrode HGA magnitude (drives sphere sizing + KDE source weights).
+  const { electrodes, hgaScale } = attachElectrodeHga(flagged, traces, phases);
+  return { variantKey, reference, electrodes, traces, hgaScale };
 }
 
 export async function loadViewerBootstrap({ onProgress } = {}) {
@@ -173,7 +176,7 @@ export async function loadViewerBootstrap({ onProgress } = {}) {
       applyPhaseConfig(manifest.metadata);
       const phases = manifest.metadata.phases;
       const variantKey = manifest.metadata.default_variant;
-      const { electrodes, traces } = await loadVariant(manifest, variantKey, phases);
+      const { electrodes, traces, hgaScale } = await loadVariant(manifest, variantKey, phases);
       reportBootstrap('electrodes', 2);
       return {
         layout: 'variant',
@@ -183,6 +186,7 @@ export async function loadViewerBootstrap({ onProgress } = {}) {
         electrodes,
         regions: [],
         traces,
+        hgaScale,
       };
     }
 

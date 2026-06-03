@@ -60,6 +60,8 @@ export default function BrainViewer({
   const [brainOpacity, setBrainOpacity] = useState(DEFAULT_KDE_BRAIN_OPACITY);
   const [brainHemisphere, setBrainHemisphere] = useState('both');
   const [colorByFunctional, setColorByFunctional] = useState(true);
+  const [colorMode, setColorMode] = useState('region'); // 'region' | 'hga'
+  const [electrodeSizeScale, setElectrodeSizeScale] = useState(1);
   const [brainViewMode, setBrainViewMode] = useState(DEFAULT_BRAIN_VIEW_MODE);
   const [cameraResetToken, setCameraResetToken] = useState(0);
   const [kdeDensityRange, setKdeDensityRange] = useState({ vmin: 0, vmax: 1, hasData: false });
@@ -232,6 +234,8 @@ export default function BrainViewer({
             selectedElectrodeId={selectedElectrodeId}
             hoveredId={hoveredId}
             colorByFunctional={colorByFunctional}
+            colorMode={colorMode}
+            sizeScale={electrodeSizeScale}
             onHover={onHover}
             onSelect={onSelect}
           />
@@ -253,6 +257,8 @@ export default function BrainViewer({
             onHover={onHover}
             onSelect={onSelect}
             colorByFunctional={colorByFunctional}
+            colorMode={colorMode}
+            sizeScale={electrodeSizeScale}
           />
         ))}
         <BrainSceneControls resetToken={cameraResetToken} />
@@ -292,13 +298,22 @@ export default function BrainViewer({
           </div>
           {brainViewMode === 'electrodes' && (
             <div className="brain-control-pill">
+              <span className="brain-control-label">Color</span>
               <button
                 type="button"
-                className={colorByFunctional ? 'brain-chip active' : 'brain-chip'}
-                onClick={() => setColorByFunctional((current) => !current)}
-                title={colorByFunctional ? 'Color electrodes by functional phase' : 'Use uniform electrode color'}
+                className={colorMode === 'region' ? 'brain-chip active' : 'brain-chip'}
+                onClick={() => setColorMode('region')}
+                title="Color electrodes by phase-overlap region"
               >
-                Functional
+                Region
+              </button>
+              <button
+                type="button"
+                className={colorMode === 'hga' ? 'brain-chip active' : 'brain-chip'}
+                onClick={() => setColorMode('hga')}
+                title="Color electrodes by HGA value"
+              >
+                HGA
               </button>
             </div>
           )}
@@ -333,6 +348,21 @@ export default function BrainViewer({
           />
           <span className="brain-opacity-value">{Math.round(brainOpacity * 100)}%</span>
         </label>
+        {brainViewMode === 'electrodes' && (
+          <label className="brain-opacity-control">
+            <span className="brain-opacity-label">Size</span>
+            <input
+              type="range"
+              min={50}
+              max={250}
+              step={5}
+              value={Math.round(electrodeSizeScale * 100)}
+              onChange={(event) => setElectrodeSizeScale(Number(event.target.value) / 100)}
+              aria-valuetext={`${electrodeSizeScale.toFixed(2)}x`}
+            />
+            <span className="brain-opacity-value">{electrodeSizeScale.toFixed(1)}x</span>
+          </label>
+        )}
       </div>
       {brainViewMode === 'kde' && (
         <KdeColorbar range={kdeDensityRange} />

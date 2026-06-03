@@ -19,18 +19,22 @@ export default function ElectrodePoint({
   onHover,
   onSelect,
   colorByFunctional,
+  colorMode = 'region',
+  sizeScale = 1,
 }) {
   const color = resolveBrainElectrodeColor({
     electrode,
     vennPhases,
     selected,
     colorByFunctional,
+    colorMode,
+    hgaScale,
   });
   const scale = isAnimating && animationScale ? animationScale : hgaScale;
   const hgaMean = isAnimating
     ? (liveHga ?? null)
     : resolveHgaMean(electrode, selectedLoad);
-  const radius = hgaToRadius(hgaMean, scale, { active, selected, hovered });
+  const radius = hgaToRadius(hgaMean, scale, { active, selected, hovered }) * sizeScale;
   const opacity = active || selected ? 0.75 : hovered ? 0.28 : dimmed ? 0.02 : 0.08;
   return (
     <group position={[electrode.x, electrode.y, electrode.z]}>
