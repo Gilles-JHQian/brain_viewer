@@ -154,9 +154,9 @@ function clipSeries(series, indices) {
   return out;
 }
 
-export function clipTraceToPhaseWindow(trace, phase) {
+export function clipTraceToPhaseWindow(trace, phase, bounds = null) {
   if (!trace?.x?.length) return { x: [], y: [], upper: [], lower: [], sem: [] };
-  const { min, max } = PHASE_TIME_RANGES[phase] ?? { min: -Infinity, max: Infinity };
+  const { min, max } = bounds ?? PHASE_TIME_RANGES[phase] ?? { min: -Infinity, max: Infinity };
   const clipped = { x: [], y: [], upper: [], lower: [], sem: [] };
   const keptIndices = [];
   trace.x.forEach((time, index) => {

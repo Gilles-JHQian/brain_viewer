@@ -32,6 +32,7 @@ const StaticPhasePlot = React.memo(function StaticPhasePlot({
   trace,
   traceKey = 'aggregate',
   yRange,
+  xRange = null,
   isSingleElectrode,
   plotHeight,
   relayoutToken = 0,
@@ -42,7 +43,7 @@ const StaticPhasePlot = React.memo(function StaticPhasePlot({
     () => buildWaveformPlotData(trace, phase, !isSingleElectrode),
     [trace, phase, isSingleElectrode],
   );
-  const { min, max } = PHASE_TIME_RANGES[phase];
+  const { min, max } = xRange ?? PHASE_TIME_RANGES[phase] ?? { min: -1, max: 2 };
   // diff overlays (act/bsl + difference) span a wider range than the fixed zscore y-range.
   const isDiff = Boolean(trace?.act?.y?.length);
   const plotFont = { family: PLOT_FONT_FAMILY, color: '#334155', size: PLOT_TICK_SIZE };
@@ -118,6 +119,8 @@ const StaticPhasePlot = React.memo(function StaticPhasePlot({
   && prev.relayoutToken === next.relayoutToken
   && prev.yRange[0] === next.yRange[0]
   && prev.yRange[1] === next.yRange[1]
+  && prev.xRange?.min === next.xRange?.min
+  && prev.xRange?.max === next.xRange?.max
 ));
 
 export default StaticPhasePlot;

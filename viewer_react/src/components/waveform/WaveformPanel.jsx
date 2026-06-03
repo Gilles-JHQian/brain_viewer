@@ -18,6 +18,7 @@ const StaticWaveformBody = React.memo(function StaticWaveformBody({
   trace,
   traceKey,
   yRange,
+  xRange,
   hasTrace,
   isSingleElectrode,
   isActivePhase,
@@ -42,6 +43,7 @@ const StaticWaveformBody = React.memo(function StaticWaveformBody({
       trace={trace}
       traceKey={traceKey}
       yRange={yRange}
+      xRange={xRange}
       isSingleElectrode={isSingleElectrode}
       isActivePhase={isActivePhase}
       currentTime={currentTime}
@@ -55,6 +57,8 @@ const StaticWaveformBody = React.memo(function StaticWaveformBody({
   && prev.isSingleElectrode === next.isSingleElectrode
   && prev.yRange[0] === next.yRange[0]
   && prev.yRange[1] === next.yRange[1]
+  && prev.xRange?.min === next.xRange?.min
+  && prev.xRange?.max === next.xRange?.max
   && prev.isActivePhase === next.isActivePhase
   && prev.currentTime === next.currentTime
   && prev.selectionEmpty === next.selectionEmpty
@@ -116,6 +120,7 @@ const PhasePlotCard = React.memo(function PhasePlotCard({
         trace={staticTrace.trace}
         traceKey={traceKey}
         yRange={staticTrace.yRange}
+        xRange={staticTrace.xRange}
         hasTrace={staticTrace.hasTrace}
         isSingleElectrode={isSingleElectrode}
         isActivePhase={isActivePhase}
@@ -149,6 +154,7 @@ function WaveformPanel({
   traces,
   variantKey = null,
   electrodesKey = '',
+  memberBounds = null,
   selectedLoad,
   layout = 'split',
   tracesLoading = false,
@@ -199,8 +205,9 @@ function WaveformPanel({
           bslLabel: resolved.bslLabel,
         }
         : { x: [], y: [], sem: null };
-      const trace = clipTraceToPhaseWindow(rawTrace, phase);
-      return { phase, index, trace, hasTrace: trace.x.length > 0 };
+      const bounds = memberBounds?.[phase] ?? null;
+      const trace = clipTraceToPhaseWindow(rawTrace, phase, bounds);
+      return { phase, index, trace, hasTrace: trace.x.length > 0, xRange: bounds };
     });
 
     // Auto-scale the shared y-axis to the data across all members (diff plots autorange
@@ -223,6 +230,7 @@ function WaveformPanel({
     electrode,
     allowMock,
     awaitingTraces,
+    memberBounds,
   ]);
 
   const playbackByPhase = useMemo(() => (

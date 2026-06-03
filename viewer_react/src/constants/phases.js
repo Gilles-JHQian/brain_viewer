@@ -29,3 +29,17 @@ export const PHASE_WIDTH_RATIOS = {
   delay: 1,
   response: 1,
 };
+
+// Default x-axis (time) bounds for the bottom time-course panel, per phase. Editable in the
+// settings panel. Phases not listed fall back to FALLBACK_PHASE_BOUNDS.
+export const DEFAULT_PHASE_BOUNDS = {
+  Stimulus: { min: -0.2, max: 0.75 },
+  Delay: { min: -0.5, max: 0.5 },
+  Response: { min: -0.5, max: 0.5 },
+};
+
+export const FALLBACK_PHASE_BOUNDS = { min: -0.5, max: 0.5 };
+
+export function defaultPhaseBounds(phase) {
+  return DEFAULT_PHASE_BOUNDS[phase] ?? FALLBACK_PHASE_BOUNDS;
+}

@@ -9,6 +9,7 @@ function PhaseWaveformPlot({
   trace,
   traceKey,
   yRange,
+  xRange,
   isSingleElectrode,
   isActivePhase,
   currentTime,
@@ -52,6 +53,7 @@ function PhaseWaveformPlot({
         trace={trace}
         traceKey={traceKey}
         yRange={yRange}
+        xRange={xRange}
         isSingleElectrode={isSingleElectrode}
         plotHeight={plotHeight}
         relayoutToken={relayoutToken}
@@ -74,6 +76,8 @@ export default React.memo(PhaseWaveformPlot, (prev, next) => {
     || prev.isSingleElectrode !== next.isSingleElectrode
     || prev.yRange[0] !== next.yRange[0]
     || prev.yRange[1] !== next.yRange[1]
+    || prev.xRange?.min !== next.xRange?.min
+    || prev.xRange?.max !== next.xRange?.max
   ) {
     return false;
   }

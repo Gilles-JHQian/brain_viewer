@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Settings as SettingsIcon } from 'lucide-react';
+import { defaultPhaseBounds } from '../../constants/phases.js';
 
 function NumberField({ label, hint, value, onChange, step, min }) {
   return (
@@ -23,6 +24,8 @@ export default function SettingsPanel({
   windowSec, onWindowSec,
   kdeBandwidth, onKdeBandwidth,
   kdeMaxDistance, onKdeMaxDistance,
+  sigWindowOnly, onSigWindowOnly,
+  phases = [], phaseBounds = {}, onPhaseBound,
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -63,6 +66,14 @@ export default function SettingsPanel({
             step={0.02}
             min={0.02}
           />
+          <label className="settings-checkbox">
+            <input
+              type="checkbox"
+              checked={!!sigWindowOnly}
+              onChange={(event) => onSigWindowOnly?.(event.target.checked)}
+            />
+            <span>Show only electrodes significant in the current window</span>
+          </label>
           <div className="settings-section-title">KDE projection</div>
           <NumberField
             label="Gaussian bandwidth (mm)"
@@ -80,6 +91,32 @@ export default function SettingsPanel({
             step={1}
             min={1}
           />
+          {phases.length > 0 && (
+            <>
+              <div className="settings-section-title">Time-course bounds (s)</div>
+              {phases.map((phase) => {
+                const bounds = phaseBounds[phase] ?? defaultPhaseBounds(phase);
+                return (
+                  <div className="settings-bounds-row" key={phase}>
+                    <span className="settings-bounds-label">{phase}</span>
+                    <input
+                      type="number"
+                      step="0.05"
+                      value={bounds.min}
+                      onChange={(event) => onPhaseBound?.(phase, 'min', event.target.value)}
+                    />
+                    <span className="settings-bounds-dash">–</span>
+                    <input
+                      type="number"
+                      step="0.05"
+                      value={bounds.max}
+                      onChange={(event) => onPhaseBound?.(phase, 'max', event.target.value)}
+                    />
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       )}
     </div>
