@@ -21,14 +21,6 @@ export function getSelectionEmptyState({
     };
   }
 
-  if (availableRoiCount > 0 && enabledRoiCount === 0) {
-    return {
-      code: 'no_rois',
-      title: 'All ROIs hidden',
-      message: 'Enable at least one ROI in the right panel, or click Show all.',
-    };
-  }
-
   if (visibleElectrodeCount === 0) {
     return {
       code: 'no_electrodes',
