@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { ELECTRODE_BASE_RADIUS } from '../../constants/brain.js';
 import { resolveHgaMean, hgaToRadius } from '../../utils/hga.js';
-import { resolveBrainElectrodeColor } from '../../utils/electrodeColors.js';
+import { resolveBrainElectrodeColor, hgaColor } from '../../utils/electrodeColors.js';
 
 export default function ElectrodeInstances({
   electrodes,
@@ -17,6 +17,7 @@ export default function ElectrodeInstances({
   hoveredId,
   colorByFunctional,
   colorMode = 'region',
+  colorDirection = 'one',
   sizeScale = 1,
   onHover,
   onSelect,
@@ -45,14 +46,20 @@ export default function ElectrodeInstances({
       tempObject.updateMatrix();
       mesh.setMatrixAt(index, tempObject.matrix);
 
-      color.set(resolveBrainElectrodeColor({
-        electrode,
-        vennPhases,
-        selected,
-        colorByFunctional,
-        colorMode,
-        hgaScale,
-      }));
+      // During animation the electrode color tracks its live HGA; otherwise it follows the
+      // chosen color mode (region overlap or static HGA).
+      const colorStr = isAnimating
+        ? hgaColor(liveHga ?? 0, scale, colorDirection)
+        : resolveBrainElectrodeColor({
+          electrode,
+          vennPhases,
+          selected,
+          colorByFunctional,
+          colorMode,
+          hgaScale,
+          colorDirection,
+        });
+      color.set(colorStr);
       mesh.setColorAt(index, color);
     });
 
@@ -70,8 +77,11 @@ export default function ElectrodeInstances({
     hoveredId,
     colorByFunctional,
     colorMode,
+    colorDirection,
     hgaScale,
     sizeScale,
+    liveHgaByElectrodeId,
+    animationScale,
     tempObject,
   ]);
 
@@ -100,7 +110,10 @@ export default function ElectrodeInstances({
       }}
     >
       <sphereGeometry args={[ELECTRODE_BASE_RADIUS, 16, 12]} />
-      <meshStandardMaterial vertexColors transparent opacity={0.85} />
+      {/* Unlit so each instance shows its mapped color exactly (instanceColor via setColorAt).
+          vertexColors must NOT be set — there is no per-vertex color attribute, which made
+          the spheres render black. */}
+      <meshBasicMaterial transparent opacity={0.95} />
     </instancedMesh>
   );
 }

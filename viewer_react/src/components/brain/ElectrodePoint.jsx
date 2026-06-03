@@ -2,7 +2,7 @@ import React from 'react';
 import { Html } from '@react-three/drei';
 import { ELECTRODE_BASE_RADIUS } from '../../constants/brain.js';
 import { resolveHgaMean, hgaToRadius } from '../../utils/hga.js';
-import { resolveBrainElectrodeColor } from '../../utils/electrodeColors.js';
+import { resolveBrainElectrodeColor, hgaColor } from '../../utils/electrodeColors.js';
 
 export default function ElectrodePoint({
   electrode,
@@ -20,17 +20,21 @@ export default function ElectrodePoint({
   onSelect,
   colorByFunctional,
   colorMode = 'region',
+  colorDirection = 'one',
   sizeScale = 1,
 }) {
-  const color = resolveBrainElectrodeColor({
-    electrode,
-    vennPhases,
-    selected,
-    colorByFunctional,
-    colorMode,
-    hgaScale,
-  });
   const scale = isAnimating && animationScale ? animationScale : hgaScale;
+  const color = isAnimating
+    ? hgaColor(liveHga ?? 0, scale, colorDirection)
+    : resolveBrainElectrodeColor({
+      electrode,
+      vennPhases,
+      selected,
+      colorByFunctional,
+      colorMode,
+      hgaScale,
+      colorDirection,
+    });
   const hgaMean = isAnimating
     ? (liveHga ?? null)
     : resolveHgaMean(electrode, selectedLoad);
