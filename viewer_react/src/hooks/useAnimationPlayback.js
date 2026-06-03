@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PHASES } from '../constants/phases.js';
-import { ANIM_STEP_MS } from '../constants/animation.js';
+import { ANIM_STEP_MS, ANIM_WINDOW_SEC } from '../constants/animation.js';
 import { fetchAndMergePhaseAnimation } from '../utils/mergeAnimationClient.js';
 import { bundleHasPlayableFrames } from '../utils/animationBundle.js';
 import { buildAnimationCacheKey } from '../utils/animationCacheKey.js';
@@ -18,6 +18,7 @@ export default function useAnimationPlayback({
   selectedSubjects,
   kdeRenderRequired = false,
   kdeFrameCacheStatus = { ready: true, progress: 1 },
+  windowSec = ANIM_WINDOW_SEC,
   onKdeRenderStart,
 }) {
   const [playingPhase, setPlayingPhase] = useState(null);
@@ -46,8 +47,8 @@ export default function useAnimationPlayback({
   );
 
   const getCacheKey = useCallback(
-    (phase) => buildAnimationCacheKey(phase, selectedLoad, subjectsKey, tableElectrodesKey),
-    [selectedLoad, subjectsKey, tableElectrodesKey],
+    (phase) => buildAnimationCacheKey(phase, selectedLoad, subjectsKey, tableElectrodesKey, windowSec),
+    [selectedLoad, subjectsKey, tableElectrodesKey, windowSec],
   );
 
   const getCachedBundle = useCallback((phase) => {
@@ -117,6 +118,7 @@ export default function useAnimationPlayback({
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     const bundle = buildSlidingWindowFrames(tableElectrodes, traces, phase, selectedLoad, {
       allowMock: layout === 'mock',
+      windowSec,
     });
     if (bundleHasPlayableFrames(bundle)) {
       setCachedBundle(phase, bundle);
@@ -130,6 +132,7 @@ export default function useAnimationPlayback({
     electrodeFilterSet,
     tableElectrodes,
     traces,
+    windowSec,
     getCachedBundle,
     setCachedBundle,
   ]);
@@ -152,6 +155,7 @@ export default function useAnimationPlayback({
     vennPhases.join('|'),
     availableSubjectsKey,
     subjectsKey,
+    windowSec,
   ]);
 
   useEffect(() => {

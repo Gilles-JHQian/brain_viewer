@@ -10,6 +10,8 @@ self.onmessage = async (event) => {
     globalHgaMax,
     splitX,
     statsHemisphere,
+    bandwidth,
+    maxDistance,
     startIndex,
   } = event.data;
 
@@ -19,7 +21,7 @@ self.onmessage = async (event) => {
     const posArray = positions instanceof Float32Array
       ? positions
       : new Float32Array(positions);
-    const influenceMap = buildInfluenceMap(posArray, influencePoints);
+    const influenceMap = buildInfluenceMap(posArray, influencePoints, bandwidth, maxDistance);
 
     await buildKdeFrameColorCache(
       influenceMap,

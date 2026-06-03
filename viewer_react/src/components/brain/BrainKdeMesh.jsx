@@ -4,6 +4,8 @@ import {
   buildFrameVertexColors,
   buildInfluenceMap,
   extractMeshPositions,
+  KDE_BANDWIDTH,
+  KDE_MAX_DISTANCE,
 } from '../../brainKde.js';
 import { BRAIN_MESH_URL, BRAIN_HEMI_SPLIT_X } from '../../constants/brain.js';
 import { buildKdeFrameColorsOffThread } from '../../utils/kdeFrameColorClient.js';
@@ -29,6 +31,8 @@ export default function BrainKdeMesh({
   frameIndex = 0,
   kdePreRenderToken = 0,
   manualMax = null,
+  bandwidth = KDE_BANDWIDTH,
+  maxDistance = KDE_MAX_DISTANCE,
   onDensityRange,
   onFrameCacheStatus,
 }) {
@@ -43,8 +47,8 @@ export default function BrainKdeMesh({
   );
 
   const influenceMap = useMemo(
-    () => buildInfluenceMap(meshData.positions, influencePoints),
-    [meshData.positions, meshData.vertexCount, pointsKey],
+    () => buildInfluenceMap(meshData.positions, influencePoints, bandwidth, maxDistance),
+    [meshData.positions, meshData.vertexCount, pointsKey, bandwidth, maxDistance],
   );
 
   const frameHgaKey = useMemo(
@@ -121,6 +125,8 @@ export default function BrainKdeMesh({
         globalHgaMax: fixedHgaMax,
         splitX: BRAIN_HEMI_SPLIT_X,
         statsHemisphere: hemisphereView,
+        bandwidth,
+        maxDistance,
         startIndex: frameIndexRef.current,
         onFrameReady: (readyIndex, colors) => {
           if (cancelled) return;
@@ -177,6 +183,8 @@ export default function BrainKdeMesh({
     pointsKey,
     hemisphereView,
     meshData.positions,
+    bandwidth,
+    maxDistance,
     onDensityRange,
     onFrameCacheStatus,
     kdePreRenderToken,

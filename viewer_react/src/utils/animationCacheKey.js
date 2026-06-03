@@ -1,3 +1,3 @@
-export function buildAnimationCacheKey(phase, selectedLoad, subjectsKey, electrodeSetKey) {
-  return `${phase}|${selectedLoad}|${subjectsKey}|${electrodeSetKey}`;
+export function buildAnimationCacheKey(phase, selectedLoad, subjectsKey, electrodeSetKey, windowSec = '') {
+  return `${phase}|${selectedLoad}|${subjectsKey}|${electrodeSetKey}|w${windowSec}`;
 }

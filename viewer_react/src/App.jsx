@@ -14,12 +14,19 @@ import DetailPanel from './components/detail/DetailPanel.jsx';
 import WaveformPanel from './components/waveform/WaveformPanel.jsx';
 import ViewerInitialLoadScreen from './components/layout/ViewerInitialLoadScreen.jsx';
 import VariantSelector from './components/layout/VariantSelector.jsx';
+import SettingsPanel from './components/layout/SettingsPanel.jsx';
+import { ANIM_WINDOW_SEC } from './constants/animation.js';
+import { KDE_BANDWIDTH, KDE_MAX_DISTANCE } from './brainKde.js';
 import { getSelectionEmptyState } from './utils/selectionEmptyState.js';
 
 export default function App() {
   // brain_viewer has no Sternberg "load" axis; downstream components still take a
   // selectedLoad prop, so it is pinned to 'all'.
   const [selectedLoad] = useState('all');
+  // Analysis settings (adjustable in the settings panel).
+  const [windowSec, setWindowSec] = useState(ANIM_WINDOW_SEC);
+  const [kdeBandwidth, setKdeBandwidth] = useState(KDE_BANDWIDTH);
+  const [kdeMaxDistance, setKdeMaxDistance] = useState(KDE_MAX_DISTANCE);
   const [brainViewMode, setBrainViewMode] = useState(DEFAULT_BRAIN_VIEW_MODE);
   const [kdeFrameCacheStatus, setKdeFrameCacheStatus] = useState({ ready: true, progress: 1 });
   const [kdePreRenderToken, setKdePreRenderToken] = useState(0);
@@ -113,6 +120,7 @@ export default function App() {
     selectedSubjects,
     kdeRenderRequired,
     kdeFrameCacheStatus,
+    windowSec: Number(windowSec) || ANIM_WINDOW_SEC,
     onKdeRenderStart: handleKdeRenderStart,
   });
 
@@ -187,6 +195,14 @@ export default function App() {
             loading={variantLoading}
             onChange={updateVariant}
           />
+          <SettingsPanel
+            windowSec={windowSec}
+            onWindowSec={setWindowSec}
+            kdeBandwidth={kdeBandwidth}
+            onKdeBandwidth={setKdeBandwidth}
+            kdeMaxDistance={kdeMaxDistance}
+            onKdeMaxDistance={setKdeMaxDistance}
+          />
           <button
             type="button"
             className="tour-replay-btn"
@@ -247,6 +263,8 @@ export default function App() {
             metadata={data.metadata}
             vennPhases={vennPhases}
             selectedLoad={selectedLoad}
+            kdeBandwidth={Number(kdeBandwidth) || KDE_BANDWIDTH}
+            kdeMaxDistance={Number(kdeMaxDistance) || KDE_MAX_DISTANCE}
             selectedIds={roiFilteredIds}
             selectedElectrodeId={selectedElectrodeId}
             hoveredId={hoveredId}

@@ -36,6 +36,8 @@ export default function BrainViewer({
   metadata,
   vennPhases,
   selectedLoad,
+  kdeBandwidth,
+  kdeMaxDistance,
   selectedIds,
   selectedElectrodeId,
   hoveredId,
@@ -218,6 +220,8 @@ export default function BrainViewer({
             frameIndex={animationFrameIdx}
             kdePreRenderToken={kdePreRenderToken}
             manualMax={kdeManualMax === '' ? null : Number(kdeManualMax)}
+            bandwidth={kdeBandwidth}
+            maxDistance={kdeMaxDistance}
             onDensityRange={handleDensityRange}
             onFrameCacheStatus={handleFrameCacheStatus}
           />

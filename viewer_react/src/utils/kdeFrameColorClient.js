@@ -20,6 +20,8 @@ export function buildKdeFrameColorsOffThread({
   globalHgaMax,
   splitX,
   statsHemisphere,
+  bandwidth,
+  maxDistance,
   startIndex,
   onFrameReady,
   onProgress,
@@ -29,7 +31,7 @@ export function buildKdeFrameColorsOffThread({
   const cacheOptions = { startIndex, onFrameReady, onProgress, chunkSize: 2 };
 
   if (!kdeWorker) {
-    const influenceMap = buildInfluenceMap(positions, influencePoints);
+    const influenceMap = buildInfluenceMap(positions, influencePoints, bandwidth, maxDistance);
     return buildKdeFrameColorCache(
       influenceMap,
       frameHgaValues,
@@ -94,6 +96,8 @@ export function buildKdeFrameColorsOffThread({
       globalHgaMax,
       splitX,
       statsHemisphere,
+      bandwidth,
+      maxDistance,
       startIndex,
     });
   });
