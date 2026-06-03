@@ -3,6 +3,7 @@ import { PHASES, PHASE_LABELS, PHASE_WIDTH_RATIOS } from '../../constants/phases
 import {
   resolvePanelPhaseTrace,
   clipTraceToPhaseWindow,
+  computeTraceYRange,
 } from '../../utils/traces.js';
 import { resolveWaveformYRange } from '../../constants/waveform.js';
 import { formatWaveformTitle } from '../../utils/selectionSummary.js';
@@ -147,6 +148,7 @@ function WaveformPanel({
   electrodes,
   traces,
   variantKey = null,
+  electrodesKey = '',
   selectedLoad,
   layout = 'split',
   tracesLoading = false,
@@ -167,9 +169,9 @@ function WaveformPanel({
 }) {
   const loadLabel = selectedLoad === 'all' ? 'all loads averaged' : `load ${selectedLoad}`;
   const isSingleElectrode = Boolean(electrode);
-  // Include variantKey so the memoized plots re-render when the variant switches even while
-  // the selection (e.g. 'aggregate') is unchanged.
-  const traceKey = `${variantKey ?? 'v'}:${electrode?.id ?? 'aggregate'}`;
+  // Include variantKey + the selected electrode set so the memoized plots re-render when the
+  // variant switches OR the Venn/ROI selection changes (even while in 'aggregate' mode).
+  const traceKey = `${variantKey ?? 'v'}:${electrode?.id ?? `agg:${electrodesKey}`}`;
   const { title, fullTitle } = formatWaveformTitle({
     summary,
     isSingleElectrode,
@@ -181,10 +183,8 @@ function WaveformPanel({
   const allowMock = layout === 'mock';
   const awaitingTraces = layout === 'split' && tracesLoading && initialLoadComplete;
 
-  const yRange = useMemo(() => resolveWaveformYRange(), []);
-
-  const staticTraces = useMemo(() => (
-    Object.fromEntries(PHASES.map((phase, index) => {
+  const staticTraces = useMemo(() => {
+    const built = PHASES.map((phase, index) => {
       const resolved = awaitingTraces
         ? null
         : resolvePanelPhaseTrace(traces, electrodes, phase, selectedLoad, electrode, allowMock);
@@ -200,22 +200,29 @@ function WaveformPanel({
         }
         : { x: [], y: [], sem: null };
       const trace = clipTraceToPhaseWindow(rawTrace, phase);
-      return [phase, {
-        phase,
-        index,
-        trace,
-        yRange,
-        hasTrace: trace.x.length > 0,
-      }];
-    }))
-  ), [
+      return { phase, index, trace, hasTrace: trace.x.length > 0 };
+    });
+
+    // Auto-scale the shared y-axis to the data across all members (diff plots autorange
+    // themselves in StaticPhasePlot, so this mainly drives zscore mode).
+    let ymin = Infinity;
+    let ymax = -Infinity;
+    built.forEach(({ trace }) => {
+      if (!trace.x.length) return;
+      const [lo, hi] = computeTraceYRange(trace);
+      ymin = Math.min(ymin, lo);
+      ymax = Math.max(ymax, hi);
+    });
+    const yRange = Number.isFinite(ymin) && ymax > ymin ? [ymin, ymax] : resolveWaveformYRange();
+
+    return Object.fromEntries(built.map((entry) => [entry.phase, { ...entry, yRange }]));
+  }, [
     traces,
     electrodes,
     selectedLoad,
     electrode,
     allowMock,
     awaitingTraces,
-    yRange,
   ]);
 
   const playbackByPhase = useMemo(() => (

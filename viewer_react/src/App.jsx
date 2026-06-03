@@ -299,6 +299,7 @@ export default function App() {
           electrodes={tableElectrodes}
           traces={data.traces || {}}
           variantKey={spec ? JSON.stringify(spec) : 'v'}
+          electrodesKey={tableElectrodesKey}
           layout={data.layout}
           tracesLoading={tracesLoading}
           tracesLoadProgress={tracesLoadProgress}

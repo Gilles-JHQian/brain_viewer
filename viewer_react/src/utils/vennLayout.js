@@ -220,6 +220,24 @@ function finalizeVennConfig(circles, vennPhases) {
   };
 }
 
+function buildOneCircleLayout(vennPhases, phaseCounts) {
+  const [radius] = scaleVennRadii(phaseCounts);
+  const centerX = 195;
+  const cy = 158;
+  const circles = [
+    {
+      key: '0',
+      cx: centerX,
+      cy,
+      r: radius,
+      labelX: centerX,
+      labelY: cy - radius - 18,
+      labelAnchor: 'middle',
+    },
+  ];
+  return finalizeVennConfig(circles, vennPhases);
+}
+
 function buildTwoCircleLayout(vennPhases, phaseCounts, regionMap) {
   const [countA, countB] = phaseCounts;
   const [radiusA, radiusB] = scaleVennRadii(phaseCounts);
@@ -374,6 +392,9 @@ function buildFourCircleLayout(vennPhases, phaseCounts, regionMap) {
 export function buildVennConfig(vennPhases, regions) {
   const regionMap = new Map((regions || []).map((region) => [region.id, region]));
   const phaseCounts = phaseUnionCounts(regions || [], vennPhases);
+  if (vennPhases.length === 1) {
+    return buildOneCircleLayout(vennPhases, phaseCounts);
+  }
   if (vennPhases.length === 2) {
     return buildTwoCircleLayout(vennPhases, phaseCounts, regionMap);
   }
