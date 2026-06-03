@@ -62,7 +62,9 @@ export default function BrainViewer({
   const [brainHemisphere, setBrainHemisphere] = useState('both');
   const [colorByFunctional, setColorByFunctional] = useState(true);
   const [colorMode, setColorMode] = useState('region'); // 'region' | 'hga'
+  const [colorDirection, setColorDirection] = useState('one'); // 'one' | 'two'
   const [electrodeSizeScale, setElectrodeSizeScale] = useState(1);
+  const [kdeManualMax, setKdeManualMax] = useState(''); // '' = auto
   const [brainViewMode, setBrainViewMode] = useState(DEFAULT_BRAIN_VIEW_MODE);
   const [cameraResetToken, setCameraResetToken] = useState(0);
   const [kdeDensityRange, setKdeDensityRange] = useState({ vmin: 0, vmax: 1, hasData: false });
@@ -215,6 +217,7 @@ export default function BrainViewer({
             frameHgaValues={kdeFrameHgaValues}
             frameIndex={animationFrameIdx}
             kdePreRenderToken={kdePreRenderToken}
+            manualMax={kdeManualMax === '' ? null : Number(kdeManualMax)}
             onDensityRange={handleDensityRange}
             onFrameCacheStatus={handleFrameCacheStatus}
           />
@@ -236,6 +239,7 @@ export default function BrainViewer({
             hoveredId={hoveredId}
             colorByFunctional={colorByFunctional}
             colorMode={colorMode}
+            colorDirection={colorDirection}
             sizeScale={electrodeSizeScale}
             onHover={onHover}
             onSelect={onSelect}
@@ -259,6 +263,7 @@ export default function BrainViewer({
             onSelect={onSelect}
             colorByFunctional={colorByFunctional}
             colorMode={colorMode}
+            colorDirection={colorDirection}
             sizeScale={electrodeSizeScale}
           />
         ))}
@@ -318,6 +323,27 @@ export default function BrainViewer({
               </button>
             </div>
           )}
+          {brainViewMode === 'electrodes' && colorMode === 'hga' && (
+            <div className="brain-control-pill">
+              <span className="brain-control-label">Map</span>
+              <button
+                type="button"
+                className={colorDirection === 'one' ? 'brain-chip active' : 'brain-chip'}
+                onClick={() => setColorDirection('one')}
+                title="One-way: 0 to max"
+              >
+                1-way
+              </button>
+              <button
+                type="button"
+                className={colorDirection === 'two' ? 'brain-chip active' : 'brain-chip'}
+                onClick={() => setColorDirection('two')}
+                title="Two-way diverging: ±max"
+              >
+                2-way
+              </button>
+            </div>
+          )}
           <button
             type="button"
             className="brain-chip brain-reset-btn"
@@ -366,10 +392,23 @@ export default function BrainViewer({
         )}
       </div>
       {brainViewMode === 'kde' && (
-        <KdeColorbar range={kdeDensityRange} />
+        <div className="kde-colorbar-stack">
+          <KdeColorbar range={kdeDensityRange} />
+          <label className="kde-manual-max" title="Manual colorbar max (blank = auto p98)">
+            <span>max</span>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              placeholder="auto"
+              value={kdeManualMax}
+              onChange={(event) => setKdeManualMax(event.target.value)}
+            />
+          </label>
+        </div>
       )}
       {brainViewMode === 'electrodes' && colorMode === 'hga' && (
-        <ElectrodeHgaColorbar scale={hgaScale} />
+        <ElectrodeHgaColorbar scale={hgaScale} direction={colorDirection} />
       )}
       <button
         type="button"

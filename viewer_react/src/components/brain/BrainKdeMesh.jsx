@@ -28,9 +28,13 @@ export default function BrainKdeMesh({
   frameHgaValues = null,
   frameIndex = 0,
   kdePreRenderToken = 0,
+  manualMax = null,
   onDensityRange,
   onFrameCacheStatus,
 }) {
+  // Manual colorbar ceiling: forces a fixed [0, manualMax] range across the whole timeline
+  // (and the static view), overriding the auto p98 range.
+  const manualRange = manualMax > 0 ? { vmin: 0, vmax: manualMax, hasData: true } : null;
   const { scene } = useGLTF(BRAIN_MESH_URL);
   const meshData = useMemo(() => extractMeshPositions(scene), [scene]);
   const pointsKey = useMemo(
@@ -198,7 +202,8 @@ export default function BrainKdeMesh({
     };
 
     if (frameHgaValues?.length && fixedHgaMax) {
-      const cachedColors = colorCacheRef.current?.[frameIndex];
+      // A manual ceiling must override the cached (auto-ranged) frame colors.
+      const cachedColors = manualRange ? null : colorCacheRef.current?.[frameIndex];
       if (cachedColors) {
         applyColors(cachedColors);
         return;
@@ -211,9 +216,11 @@ export default function BrainKdeMesh({
         meshData.positions,
         BRAIN_HEMI_SPLIT_X,
         kdeOptions,
-        fixedRangeRef.current,
+        manualRange ?? fixedRangeRef.current,
       );
-      if (!densityRangeReportedRef.current && range?.hasData) {
+      if (manualRange) {
+        onDensityRange?.(manualRange);
+      } else if (!densityRangeReportedRef.current && range?.hasData) {
         onDensityRange?.(range);
         densityRangeReportedRef.current = true;
       }
@@ -228,9 +235,9 @@ export default function BrainKdeMesh({
       meshData.positions,
       BRAIN_HEMI_SPLIT_X,
       kdeOptions,
-      null,
+      manualRange,
     );
-    onDensityRange?.(range);
+    onDensityRange?.(manualRange ?? range);
     applyColors(colors);
   }, [
     overlayBrain,
@@ -244,6 +251,7 @@ export default function BrainKdeMesh({
     meshData.positions,
     hemisphereView,
     influencePoints.length,
+    manualMax,
     onDensityRange,
   ]);
 

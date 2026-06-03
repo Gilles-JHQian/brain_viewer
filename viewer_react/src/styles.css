@@ -879,6 +879,43 @@ h1 {
   align-items: center;
 }
 
+.kde-colorbar-stack {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  z-index: 2;
+}
+
+.kde-colorbar-stack .kde-colorbar {
+  position: static;
+  right: auto;
+  bottom: auto;
+}
+
+.kde-manual-max {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  padding: 4px 8px;
+}
+
+.kde-manual-max input {
+  width: 56px;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid #dbe4ef;
+  border-radius: 6px;
+}
+
 .kde-colorbar-title {
   font-size: 10px;
   font-weight: 700;
