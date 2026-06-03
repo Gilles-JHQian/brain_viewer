@@ -96,20 +96,45 @@ async function loadVariantPhasePayloads(variant, phases) {
   return { sigByPhase, phasePayloads };
 }
 
-// Build traces[electrodeId][phase] = { all: { time, value, sem } } from the per-phase
-// payloads (rows aligned with channel_names). brain_viewer has no "load" axis, so a single
-// 'all' bucket carries the trace; resolvePhaseTrace's selectedLoad='all' path consumes it.
-function buildVariantTraces(phasePayloads, phases) {
+// Resolve the [activeLabel, baselineLabel] pair for a diff direction from whichever map
+// the manifest carries (condition_map / stim_type_map / neighborhood_map).
+function diffDirectionLabels(diffMeta, direction) {
+  const map = diffMeta?.condition_map || diffMeta?.stim_type_map || diffMeta?.neighborhood_map;
+  const pair = map?.[direction];
+  return Array.isArray(pair) ? pair : ['A', 'B'];
+}
+
+// Build traces[electrodeId][phase] = { all: { time, value, sem, [act], [bsl], labels } } from
+// the per-phase payloads (rows aligned with channel_names). brain_viewer has no "load" axis,
+// so a single 'all' bucket carries the trace; resolvePhaseTrace's selectedLoad='all' path
+// consumes it. For diff variants the primary line is data_diff, with act/bsl carried for the
+// single-electrode overlay.
+function buildVariantTraces(phasePayloads, phases, labels = null) {
   const traces = {};
   phases.forEach((phase) => {
     const payload = phasePayloads[phase];
     if (!payload) return;
-    const { times, channel_names: names, data, trial_sem: sem } = payload;
+    const { times, channel_names: names } = payload;
+    const isDiff = Array.isArray(payload.data_diff);
     (names || []).forEach((name, i) => {
       if (!traces[name]) traces[name] = {};
-      traces[name][phase] = {
-        all: { time: times, value: data?.[i] ?? [], sem: sem ? sem[i] : null },
-      };
+      if (isDiff) {
+        traces[name][phase] = {
+          all: {
+            time: times,
+            value: payload.data_diff?.[i] ?? [],
+            sem: payload.trial_sem_diff ? payload.trial_sem_diff[i] : null,
+            act: { value: payload.data_act?.[i] ?? [], sem: payload.trial_sem_act ? payload.trial_sem_act[i] : null },
+            bsl: { value: payload.data_bsl?.[i] ?? [], sem: payload.trial_sem_bsl ? payload.trial_sem_bsl[i] : null },
+            actLabel: labels?.[0] ?? 'Active',
+            bslLabel: labels?.[1] ?? 'Baseline',
+          },
+        };
+      } else {
+        traces[name][phase] = {
+          all: { time: times, value: payload.data?.[i] ?? [], sem: payload.trial_sem ? payload.trial_sem[i] : null },
+        };
+      }
     });
   });
   return traces;
@@ -126,7 +151,10 @@ export async function loadVariant(manifest, variantKey, phases) {
     loadVariantPhasePayloads(variant, phases),
   ]);
   const electrodes = attachPhaseFlags(rawElectrodes, sigByPhase, phases);
-  const traces = buildVariantTraces(phasePayloads, phases);
+  const labels = variant.datatype === 'diff'
+    ? diffDirectionLabels(manifest?.metadata?.diff_types?.[variant.diff_type], variant.direction)
+    : null;
+  const traces = buildVariantTraces(phasePayloads, phases, labels);
   return { variantKey, reference, electrodes, traces };
 }
 

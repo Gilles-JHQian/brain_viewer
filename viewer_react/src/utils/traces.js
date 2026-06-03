@@ -3,6 +3,11 @@ import { LOAD_OPTIONS, PHASE_TIME_RANGES } from '../constants/loads.js';
 import { hexToRgba, phaseColor } from '../constants/colors.js';
 import { loadKey } from './hga.js';
 
+// Diff-mode overlay colors: active condition, baseline condition, and the difference line.
+const DIFF_ACT_COLOR = '#2563eb';
+const DIFF_BSL_COLOR = '#d97706';
+const DIFF_LINE_COLOR = '#0f172a';
+
 export function interpolateTraceValue(trace, time) {
   if (!trace?.time?.length) return null;
   const times = trace.time;
@@ -42,8 +47,8 @@ function averageLoadTraces(phaseTraces) {
   const loads = Object.keys(phaseTraces || {});
   if (loads.length === 0) return null;
   if (loads.length === 1) {
-    const trace = phaseTraces[loads[0]];
-    return { time: trace.time, value: trace.value, sem: trace.sem ?? null };
+    // Single bucket (brain_viewer has no load axis): preserve any diff act/bsl + labels.
+    return { ...phaseTraces[loads[0]] };
   }
   const timeSet = new Set();
   loads.forEach((load) => phaseTraces[load].time.forEach((time) => timeSet.add(time)));
@@ -134,12 +139,29 @@ export function resolvePanelPhaseTrace(traces, electrodes, phase, selectedLoad, 
   return averageElectrodePhaseTraces(traces, electrodes, phase, selectedLoad, allowMock);
 }
 
+function clipSeries(series, indices) {
+  const out = { y: [], sem: [], upper: [], lower: [] };
+  indices.forEach((index) => {
+    const v = series.value?.[index];
+    out.y.push(v);
+    const sem = series.sem?.[index] ?? null;
+    if (sem != null) {
+      out.sem.push(sem);
+      out.upper.push(v + sem);
+      out.lower.push(v - sem);
+    }
+  });
+  return out;
+}
+
 export function clipTraceToPhaseWindow(trace, phase) {
   if (!trace?.x?.length) return { x: [], y: [], upper: [], lower: [], sem: [] };
   const { min, max } = PHASE_TIME_RANGES[phase] ?? { min: -Infinity, max: Infinity };
   const clipped = { x: [], y: [], upper: [], lower: [], sem: [] };
+  const keptIndices = [];
   trace.x.forEach((time, index) => {
     if (time >= min && time <= max) {
+      keptIndices.push(index);
       clipped.x.push(time);
       clipped.y.push(trace.y[index]);
       const sem = trace.sem?.[index] ?? null;
@@ -150,6 +172,13 @@ export function clipTraceToPhaseWindow(trace, phase) {
       }
     }
   });
+  // diff overlay: carry act/bsl series (clipped to the same window) + labels
+  if (trace.act?.value?.length) {
+    clipped.act = clipSeries(trace.act, keptIndices);
+    clipped.bsl = clipSeries(trace.bsl ?? { value: [] }, keptIndices);
+    clipped.actLabel = trace.actLabel;
+    clipped.bslLabel = trace.bslLabel;
+  }
   return clipped;
 }
 
@@ -172,7 +201,46 @@ export function computeTraceYRange(trace) {
   return [ymin - pad, ymax + pad];
 }
 
+// Diff overlay: active + baseline conditions (with SEM bands) plus the difference line.
+function buildDiffPlotData(trace) {
+  const out = [];
+  const reversedX = trace.x.slice().reverse();
+  const addBand = (series, color) => {
+    if (!series?.upper?.length) return;
+    out.push({
+      x: [...trace.x, ...reversedX],
+      y: [...series.upper, ...series.lower.slice().reverse()],
+      type: 'scatter',
+      mode: 'lines',
+      line: { color: 'rgba(0,0,0,0)', width: 0 },
+      fill: 'toself',
+      fillcolor: hexToRgba(color, 0.15),
+      hoverinfo: 'skip',
+      showlegend: false,
+    });
+  };
+  const addLine = (y, color, name, dash) => {
+    out.push({
+      x: trace.x,
+      y,
+      type: 'scatter',
+      mode: 'lines',
+      line: { color, width: 2, dash },
+      name,
+      hovertemplate: `${name}: t=%{x:.2f}s, %{y:.2f}<extra></extra>`,
+      showlegend: false,
+    });
+  };
+  addBand(trace.act, DIFF_ACT_COLOR);
+  addBand(trace.bsl, DIFF_BSL_COLOR);
+  addLine(trace.act.y, DIFF_ACT_COLOR, trace.actLabel || 'Active');
+  addLine(trace.bsl.y, DIFF_BSL_COLOR, trace.bslLabel || 'Baseline');
+  addLine(trace.y, DIFF_LINE_COLOR, 'Difference', 'dot');
+  return out;
+}
+
 export function buildWaveformPlotData(trace, phase, isAggregate) {
+  if (trace.act?.y?.length) return buildDiffPlotData(trace);
   const color = phaseColor(phase);
   const traces = [];
   if (isAggregate && trace.upper.length > 0) {

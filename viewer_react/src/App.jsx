@@ -53,6 +53,7 @@ export default function App() {
     selectAllSubjects,
     deselectAllSubjects,
     variantSel,
+    variantKey,
     variantOptions,
     variantLoading,
     updateVariant,
@@ -285,12 +286,13 @@ export default function App() {
       </main>
 
       <section className="panel waveform-panel">
-        <PanelTitle icon={<Activity size={18} />} title="Four-phase HGA time courses" />
+        <PanelTitle icon={<Activity size={18} />} title="Per-phase HGA time courses" />
         <WaveformPanel
           electrode={selectedElectrode}
           summary={selectedSummary}
           electrodes={tableElectrodes}
           traces={data.traces || {}}
+          variantKey={variantKey}
           layout={data.layout}
           tracesLoading={tracesLoading}
           tracesLoadProgress={tracesLoadProgress}

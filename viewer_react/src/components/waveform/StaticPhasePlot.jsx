@@ -43,6 +43,8 @@ const StaticPhasePlot = React.memo(function StaticPhasePlot({
     [trace, phase, isSingleElectrode],
   );
   const { min, max } = PHASE_TIME_RANGES[phase];
+  // diff overlays (act/bsl + difference) span a wider range than the fixed zscore y-range.
+  const isDiff = Boolean(trace?.act?.y?.length);
   const plotFont = { family: PLOT_FONT_FAMILY, color: '#334155', size: PLOT_TICK_SIZE };
   const layout = useMemo(() => ({
     uirevision: `waveform-static-${traceKey}-${phase}`,
@@ -77,8 +79,8 @@ const StaticPhasePlot = React.memo(function StaticPhasePlot({
       title: index === 0
         ? { text: 'HGA (z)', font: { family: PLOT_FONT_FAMILY, size: PLOT_AXIS_TITLE_SIZE, color: '#334155' }, standoff: 6 }
         : undefined,
-      range: yRange,
-      autorange: false,
+      range: isDiff ? undefined : yRange,
+      autorange: isDiff ? true : false,
       showgrid: false,
       zeroline: true,
       zerolinecolor: '#475569',
@@ -86,7 +88,7 @@ const StaticPhasePlot = React.memo(function StaticPhasePlot({
       showticklabels: index === 0,
     },
     height: plotHeight,
-  }), [phase, index, traceKey, yRange, min, max, plotHeight]);
+  }), [phase, index, traceKey, yRange, min, max, plotHeight, isDiff]);
 
   useLayoutEffect(() => {
     const node = plotRef.current;

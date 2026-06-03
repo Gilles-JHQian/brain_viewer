@@ -146,6 +146,7 @@ function WaveformPanel({
   summary,
   electrodes,
   traces,
+  variantKey = null,
   selectedLoad,
   layout = 'split',
   tracesLoading = false,
@@ -166,7 +167,9 @@ function WaveformPanel({
 }) {
   const loadLabel = selectedLoad === 'all' ? 'all loads averaged' : `load ${selectedLoad}`;
   const isSingleElectrode = Boolean(electrode);
-  const traceKey = electrode?.id ?? 'aggregate';
+  // Include variantKey so the memoized plots re-render when the variant switches even while
+  // the selection (e.g. 'aggregate') is unchanged.
+  const traceKey = `${variantKey ?? 'v'}:${electrode?.id ?? 'aggregate'}`;
   const { title, fullTitle } = formatWaveformTitle({
     summary,
     isSingleElectrode,
@@ -186,7 +189,15 @@ function WaveformPanel({
         ? null
         : resolvePanelPhaseTrace(traces, electrodes, phase, selectedLoad, electrode, allowMock);
       const rawTrace = resolved
-        ? { x: resolved.time, y: resolved.value, sem: resolved.sem ?? null }
+        ? {
+          x: resolved.time,
+          y: resolved.value,
+          sem: resolved.sem ?? null,
+          act: resolved.act ?? null,
+          bsl: resolved.bsl ?? null,
+          actLabel: resolved.actLabel,
+          bslLabel: resolved.bslLabel,
+        }
         : { x: [], y: [], sem: null };
       const trace = clipTraceToPhaseWindow(rawTrace, phase);
       return [phase, {
