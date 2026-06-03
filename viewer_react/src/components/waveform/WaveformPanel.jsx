@@ -12,6 +12,9 @@ import PhaseWaveformPlot from './PhaseWaveformPlot.jsx';
 import PanelEmptyState from '../layout/PanelEmptyState.jsx';
 import TraceLoadProgress from '../ui/TraceLoadProgress.jsx';
 
+// The bottom trace shows a little context beyond the (animation) bounds front and back.
+const TRACE_BOUNDS_MARGIN_SEC = 0.1;
+
 const StaticWaveformBody = React.memo(function StaticWaveformBody({
   phase,
   index,
@@ -206,8 +209,12 @@ function WaveformPanel({
         }
         : { x: [], y: [], sem: null };
       const bounds = memberBounds?.[phase] ?? null;
-      const trace = clipTraceToPhaseWindow(rawTrace, phase, bounds);
-      return { phase, index, trace, hasTrace: trace.x.length > 0, xRange: bounds };
+      // Trace display window = animation bounds padded with a small margin front/back.
+      const display = bounds
+        ? { min: bounds.min - TRACE_BOUNDS_MARGIN_SEC, max: bounds.max + TRACE_BOUNDS_MARGIN_SEC }
+        : null;
+      const trace = clipTraceToPhaseWindow(rawTrace, phase, display);
+      return { phase, index, trace, hasTrace: trace.x.length > 0, xRange: display };
     });
 
     // Auto-scale the shared y-axis to the data across all members (diff plots autorange

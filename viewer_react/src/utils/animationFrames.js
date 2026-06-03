@@ -80,10 +80,12 @@ export function buildSlidingWindowFrames(
   phase,
   selectedLoad,
   {
-    windowSec = ANIM_WINDOW_SEC, stepSec = ANIM_STEP_SEC, allowMock = false, gateByWindow = true,
+    windowSec = ANIM_WINDOW_SEC, stepSec = ANIM_STEP_SEC, allowMock = false,
+    gateByWindow = true, bounds = null,
   } = {},
 ) {
-  const { min, max } = PHASE_TIME_RANGES[phase];
+  // The animation sweeps across the (cropped) bounds for this phase.
+  const { min, max } = bounds ?? PHASE_TIME_RANGES[phase] ?? { min: -1, max: 2 };
   const tEnd = max - windowSec;
   const frames = [];
 

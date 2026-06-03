@@ -63,6 +63,7 @@ function PhaseWaveformPlot({
         index={index}
         currentTime={currentTime}
         visible={isActivePhase}
+        xRange={xRange}
       />
     </div>
   );

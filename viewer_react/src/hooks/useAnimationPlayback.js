@@ -20,6 +20,7 @@ export default function useAnimationPlayback({
   kdeFrameCacheStatus = { ready: true, progress: 1 },
   windowSec = ANIM_WINDOW_SEC,
   gateByWindow = true,
+  memberBounds = null,
   onKdeRenderStart,
 }) {
   const [playingPhase, setPlayingPhase] = useState(null);
@@ -48,10 +49,14 @@ export default function useAnimationPlayback({
   );
 
   const getCacheKey = useCallback(
-    (phase) => buildAnimationCacheKey(
-      phase, selectedLoad, subjectsKey, tableElectrodesKey, windowSec, gateByWindow,
-    ),
-    [selectedLoad, subjectsKey, tableElectrodesKey, windowSec, gateByWindow],
+    (phase) => {
+      const b = memberBounds?.[phase];
+      const boundsKey = b ? `${b.min},${b.max}` : '';
+      return buildAnimationCacheKey(
+        phase, selectedLoad, subjectsKey, tableElectrodesKey, windowSec, gateByWindow, boundsKey,
+      );
+    },
+    [selectedLoad, subjectsKey, tableElectrodesKey, windowSec, gateByWindow, memberBounds],
   );
 
   const getCachedBundle = useCallback((phase) => {
@@ -123,6 +128,7 @@ export default function useAnimationPlayback({
       allowMock: layout === 'mock',
       windowSec,
       gateByWindow,
+      bounds: memberBounds?.[phase] ?? null,
     });
     if (bundleHasPlayableFrames(bundle)) {
       setCachedBundle(phase, bundle);
@@ -138,6 +144,7 @@ export default function useAnimationPlayback({
     traces,
     windowSec,
     gateByWindow,
+    memberBounds,
     getCachedBundle,
     setCachedBundle,
   ]);
@@ -162,6 +169,7 @@ export default function useAnimationPlayback({
     subjectsKey,
     windowSec,
     gateByWindow,
+    memberBounds,
   ]);
 
   useEffect(() => {

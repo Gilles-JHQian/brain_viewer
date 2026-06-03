@@ -96,13 +96,9 @@ h1 {
 .topbar-controls {
   display: flex;
   gap: 10px;
-  /* Never wrap: overflow scrolls horizontally so a crowded toolbar can't grow the
-     top bar and squeeze the panels below it. */
+  align-items: center;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  min-width: 0;
   justify-content: flex-end;
-  padding-bottom: 2px;
 }
 
 .control-pill,

@@ -9,8 +9,9 @@ export default function PlaybackVLineOverlay({
   index,
   currentTime,
   visible,
+  xRange = null,
 }) {
-  const { min, max } = PHASE_TIME_RANGES[phase];
+  const { min, max } = xRange ?? PHASE_TIME_RANGES[phase] ?? { min: -1, max: 2 };
   const marginLeft = index === 0 ? 48 : 28;
   const marginRight = 12;
 

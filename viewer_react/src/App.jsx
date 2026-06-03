@@ -101,6 +101,18 @@ export default function App() {
     roiBarItems,
   } = useSelectionPipeline({ subjectFilteredElectrodes, electrodeById, vennMembers });
 
+  // Time-course / animation x-axis bounds per Venn member. Phase axis -> the member's own
+  // phase bounds; condition axis -> all members share the fixed phase's bounds.
+  const memberBounds = useMemo(() => {
+    if (!spec) return null;
+    const out = {};
+    (vennMembers || []).forEach((member) => {
+      const phaseKey = spec.axis === 'condition' ? spec.fixedPhase : member;
+      out[member] = phaseBounds[phaseKey] ?? defaultPhaseBounds(phaseKey);
+    });
+    return out;
+  }, [spec, vennMembers, phaseBounds]);
+
   const kdeRenderRequired = brainViewMode === 'kde';
 
   const {
@@ -132,6 +144,7 @@ export default function App() {
     kdeFrameCacheStatus,
     windowSec: Number(windowSec) || ANIM_WINDOW_SEC,
     gateByWindow: sigWindowOnly,
+    memberBounds,
     onKdeRenderStart: handleKdeRenderStart,
   });
 
@@ -156,18 +169,6 @@ export default function App() {
   const canPlay = tableElectrodes.length > 0
     && !selectionEmpty
     && (data?.layout === 'split' || !tracesLoading);
-
-  // Time-course x-axis bounds per Venn member. Phase axis -> the member's own phase bounds;
-  // condition axis -> all members share the fixed phase's bounds.
-  const memberBounds = useMemo(() => {
-    if (!spec) return null;
-    const out = {};
-    (vennMembers || []).forEach((member) => {
-      const phaseKey = spec.axis === 'condition' ? spec.fixedPhase : member;
-      out[member] = phaseBounds[phaseKey] ?? defaultPhaseBounds(phaseKey);
-    });
-    return out;
-  }, [spec, vennMembers, phaseBounds]);
 
   if (isInitialLoading) {
     return (
