@@ -20,6 +20,7 @@ import {
 import BrainSceneLighting from './BrainSceneLighting.jsx';
 import BrainSceneControls from './BrainSceneControls.jsx';
 import KdeColorbar from './KdeColorbar.jsx';
+import ElectrodeHgaColorbar from './ElectrodeHgaColorbar.jsx';
 import FallbackBrainSphere from './FallbackBrainSphere.jsx';
 import AverageBrainMesh from './AverageBrainMesh.jsx';
 import BrainKdeMesh from './BrainKdeMesh.jsx';
@@ -366,6 +367,9 @@ export default function BrainViewer({
       </div>
       {brainViewMode === 'kde' && (
         <KdeColorbar range={kdeDensityRange} />
+      )}
+      {brainViewMode === 'electrodes' && colorMode === 'hga' && (
+        <ElectrodeHgaColorbar scale={hgaScale} />
       )}
       <button
         type="button"

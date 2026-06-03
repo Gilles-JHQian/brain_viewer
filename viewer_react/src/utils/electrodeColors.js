@@ -19,6 +19,14 @@ function lerp(a, b, t) {
   return Math.round(a + (b - a) * t);
 }
 
+/** CSS gradient (low -> high, bottom -> top) matching the electrode HGA colormap. */
+export function hgaCssGradient() {
+  const stops = HGA_STOPS.map(
+    ([t, [r, g, b]]) => `rgb(${r}, ${g}, ${b}) ${Math.round(t * 100)}%`,
+  );
+  return `linear-gradient(to top, ${stops.join(', ')})`;
+}
+
 export function hgaColor(value, scale) {
   if (value == null || !scale?.vmax) return INACTIVE_ELECTRODE_COLOR;
   const vmin = scale.vmin ?? 0;
