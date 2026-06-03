@@ -21,6 +21,11 @@ export function getSelectionEmptyState({
     };
   }
 
+  // Deselecting all ROIs is an intentional, silent state — no overlay/prompt.
+  if (availableRoiCount > 0 && enabledRoiCount === 0) {
+    return null;
+  }
+
   if (visibleElectrodeCount === 0) {
     return {
       code: 'no_electrodes',

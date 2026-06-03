@@ -3,21 +3,28 @@ import {
   Database, Layers, GitCompare, Activity, Shuffle, Loader2,
 } from 'lucide-react';
 
-function ChipGroup({ icon, label, options, value, onSelect, formatLabel }) {
+function ChipGroup({
+  icon, label, options, value, onSelect, formatLabel, disabled = [], disabledTitle,
+}) {
   if (!options?.length) return null;
   return (
     <div className="load-selector" data-tour={`variant-${label}`}>
       <span className="load-selector-label">{icon} {label}</span>
-      {options.map((option) => (
-        <button
-          key={option}
-          type="button"
-          className={value === option ? 'load-chip active' : 'load-chip'}
-          onClick={() => onSelect(option)}
-        >
-          {formatLabel ? formatLabel(option) : option}
-        </button>
-      ))}
+      {options.map((option) => {
+        const isDisabled = disabled.includes(option);
+        return (
+          <button
+            key={option}
+            type="button"
+            className={value === option ? 'load-chip active' : 'load-chip'}
+            disabled={isDisabled}
+            title={isDisabled ? disabledTitle : undefined}
+            onClick={() => onSelect(option)}
+          >
+            {formatLabel ? formatLabel(option) : option}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -30,6 +37,7 @@ export default function VariantSelector({ spec, options, loading, onChange }) {
 
   const {
     references, datatypes, conditions, phases, diffTypes, diffTypesMeta, axes,
+    conditionAxisDisabled,
   } = options;
   const isDiff = spec.datatype === 'diff';
   const directions = isDiff ? (diffTypesMeta?.[spec.diffType]?.directions ?? []) : [];
@@ -81,6 +89,8 @@ export default function VariantSelector({ spec, options, loading, onChange }) {
           value={spec.axis}
           onSelect={(axis) => onChange({ axis })}
           formatLabel={axisLabel}
+          disabled={conditionAxisDisabled ? ['condition'] : []}
+          disabledTitle="This difference is already over conditions"
         />
       )}
       {/* The fixed dimension is the one the Venn is NOT iterating over. */}

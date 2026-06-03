@@ -290,9 +290,6 @@ export default function usePhaseOverlapData() {
   // --- variant selector options (consumed by the top-bar VariantSelector) ---
   const variantOptions = useMemo(() => {
     if (!isVariantLayout || !metadata || !spec) return null;
-    const axes = datatypeHasCondition(spec.datatype, spec.diffType)
-      ? ['phase', 'condition']
-      : ['phase'];
     return {
       references: metadata.references ?? [],
       datatypes: metadata.datatypes ?? ['zscore', 'diff'],
@@ -300,7 +297,10 @@ export default function usePhaseOverlapData() {
       phases: metadata.phases ?? [],
       diffTypes: Object.keys(diffTypesMeta),
       diffTypesMeta,
-      axes,
+      // Always expose both axes; condition-overlap is disabled (not hidden) when the
+      // datatype has no condition dimension (condition-diff).
+      axes: ['phase', 'condition'],
+      conditionAxisDisabled: !datatypeHasCondition(spec.datatype, spec.diffType),
     };
   }, [isVariantLayout, metadata, spec, diffTypesMeta]);
 
