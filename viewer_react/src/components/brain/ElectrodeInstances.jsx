@@ -39,7 +39,9 @@ export default function ElectrodeInstances({
       const hgaMean = isAnimating
         ? (liveHga ?? null)
         : resolveHgaMean(electrode, selectedLoad);
-      const radius = hgaToRadius(hgaMean, scale, { active, selected, hovered });
+      let radius = hgaToRadius(hgaMean, scale, { active, selected, hovered });
+      // During animation, hide electrodes with no significant cluster in the current window.
+      if (isAnimating && liveHga == null) radius = 0;
 
       tempObject.position.set(electrode.x, electrode.y, electrode.z);
       tempObject.scale.setScalar(radius * sizeScale);

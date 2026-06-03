@@ -38,7 +38,9 @@ export default function ElectrodePoint({
   const hgaMean = isAnimating
     ? (liveHga ?? null)
     : resolveHgaMean(electrode, selectedLoad);
-  const radius = hgaToRadius(hgaMean, scale, { active, selected, hovered }) * sizeScale;
+  // During animation, hide electrodes with no significant cluster in the current window.
+  const hiddenThisFrame = isAnimating && liveHga == null;
+  const radius = hiddenThisFrame ? 0 : hgaToRadius(hgaMean, scale, { active, selected, hovered }) * sizeScale;
   const opacity = active || selected ? 0.75 : hovered ? 0.28 : dimmed ? 0.02 : 0.08;
   return (
     <group position={[electrode.x, electrode.y, electrode.z]}>

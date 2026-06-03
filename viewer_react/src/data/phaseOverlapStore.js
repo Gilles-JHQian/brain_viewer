@@ -134,12 +134,15 @@ function buildVariantTraces(phasePayloads, phases, labels = null) {
     const isDiff = Array.isArray(payload.data_diff);
     (names || []).forEach((name, i) => {
       if (!traces[name]) traces[name] = {};
+      // Time-resolved significance mask (n_times booleans) for per-frame gating in animation.
+      const mask = payload.mask ? payload.mask[i] : null;
       if (isDiff) {
         traces[name][phase] = {
           all: {
             time: times,
             value: payload.data_diff?.[i] ?? [],
             sem: payload.trial_sem_diff ? payload.trial_sem_diff[i] : null,
+            mask,
             act: { value: payload.data_act?.[i] ?? [], sem: payload.trial_sem_act ? payload.trial_sem_act[i] : null },
             bsl: { value: payload.data_bsl?.[i] ?? [], sem: payload.trial_sem_bsl ? payload.trial_sem_bsl[i] : null },
             actLabel: labels?.[0] ?? 'Active',
@@ -148,7 +151,12 @@ function buildVariantTraces(phasePayloads, phases, labels = null) {
         };
       } else {
         traces[name][phase] = {
-          all: { time: times, value: payload.data?.[i] ?? [], sem: payload.trial_sem ? payload.trial_sem[i] : null },
+          all: {
+            time: times,
+            value: payload.data?.[i] ?? [],
+            sem: payload.trial_sem ? payload.trial_sem[i] : null,
+            mask,
+          },
         };
       }
     });

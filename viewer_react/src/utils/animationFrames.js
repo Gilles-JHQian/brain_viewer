@@ -8,6 +8,19 @@ import {
   causalWindowMeanForElectrode,
 } from './traces.js';
 
+// An electrode has a significant cluster in [t0,t1] iff any masked timepoint falls in the
+// window (mirrors hga_plotter.py: np.any(mask[:, time_in_window])). No mask -> not gated.
+function isSignificantInWindow(traces, electrode, phase, t0, t1) {
+  const tr = traces?.[electrode.id]?.[phase]?.all;
+  const mask = tr?.mask;
+  const time = tr?.time;
+  if (!mask || !time) return true;
+  for (let i = 0; i < time.length; i += 1) {
+    if (time[i] >= t0 && time[i] <= t1 && mask[i]) return true;
+  }
+  return false;
+}
+
 function percentile95(values) {
   if (!values.length) return 1;
   const sorted = values.map((value) => Math.abs(value)).sort((a, b) => a - b);
@@ -75,6 +88,8 @@ export function buildSlidingWindowFrames(
   for (let t = min; t <= tEnd + 1e-9; t += stepSec) {
     const hgaByElectrodeId = {};
     electrodes.forEach((electrode) => {
+      // Only include electrodes with a significant cluster in this window.
+      if (!isSignificantInWindow(traces, electrode, phase, t, t + windowSec)) return;
       const mean = causalWindowMeanForElectrode(
         traces,
         electrode,
