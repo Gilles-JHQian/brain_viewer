@@ -9,6 +9,8 @@ export const KDE_PERCENTILE_MAX = 98;
 export const KDE_COLORMAP_STEPS = 256;
 /** Skip the whitest part of vlag so low density reads as pale pink, not blown-out white. */
 export const KDE_COLORMAP_DISPLAY_MIN = 0.08;
+/** Neutral cortex grey for vertices with no KDE density (matches DEFAULT_BRAIN_COLOR). */
+export const KDE_EMPTY_GREY = 0.9;
 
 // seaborn vlag peak red — same as notebooks/univarite.ipynb colormap='vlag'
 export const PROJECT_RED = '#A9373B';
@@ -454,7 +456,12 @@ export function densityToVertexColors(
   for (let i = 0; i < vertexCount; i += 1) {
     const value = density[i];
     if (value <= 0) {
-      colors[i * 4 + 3] = 0;
+      // No density: neutral cortex grey at full opacity, so the entire surface uses one
+      // material (removes the transparent seam between value / no-value regions).
+      colors[i * 4] = KDE_EMPTY_GREY;
+      colors[i * 4 + 1] = KDE_EMPTY_GREY;
+      colors[i * 4 + 2] = KDE_EMPTY_GREY;
+      colors[i * 4 + 3] = 1;
       continue;
     }
     if (

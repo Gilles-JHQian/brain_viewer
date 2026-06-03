@@ -10,11 +10,8 @@ import {
 import { BRAIN_MESH_URL, BRAIN_HEMI_SPLIT_X } from '../../constants/brain.js';
 import { buildKdeFrameColorsOffThread } from '../../utils/kdeFrameColorClient.js';
 import {
-  applyBrainMaterial,
-  applyHemisphereClipping,
   applyKdeOverlayMaterial,
   applyOverlayVertexColors,
-  prepareBrainWithHemispheres,
   prepareKdeOverlayBrain,
   setBrainHemisphereVisibility,
 } from '../../lib/brainMesh.js';
@@ -66,22 +63,16 @@ export default function BrainKdeMesh({
   const densityRangeReportedRef = useRef(false);
   const [cacheVersion, setCacheVersion] = useState(0);
 
-  const { baseBrain, overlayBrain } = useMemo(() => ({
-    baseBrain: prepareBrainWithHemispheres(scene.clone(true), BRAIN_HEMI_SPLIT_X),
-    overlayBrain: prepareKdeOverlayBrain(scene, BRAIN_HEMI_SPLIT_X),
-  }), [scene]);
+  const overlayBrain = useMemo(
+    () => prepareKdeOverlayBrain(scene, BRAIN_HEMI_SPLIT_X),
+    [scene],
+  );
 
   overlayBrainRef.current = overlayBrain;
 
   useEffect(() => {
     frameIndexRef.current = frameIndex;
   }, [frameIndex]);
-
-  useEffect(() => {
-    applyBrainMaterial(baseBrain, opacity, { forceSolid: true, lit: true });
-    applyHemisphereClipping(baseBrain, 'both');
-    setBrainHemisphereVisibility(baseBrain, hemisphereView);
-  }, [baseBrain, opacity, hemisphereView]);
 
   useEffect(() => {
     applyKdeOverlayMaterial(overlayBrain, 'both');
@@ -193,8 +184,15 @@ export default function BrainKdeMesh({
   useEffect(() => {
     if (!meshData.vertexCount || !influencePoints.length) {
       lastAppliedColorsRef.current = null;
-      const empty = new Float32Array(meshData.vertexCount * 4);
-      applyOverlayVertexColors(overlayBrain, empty);
+      // Fill with neutral grey (not transparent) so the brain still shows as one material.
+      const grey = new Float32Array(meshData.vertexCount * 4);
+      for (let i = 0; i < meshData.vertexCount; i += 1) {
+        grey[i * 4] = 0.9;
+        grey[i * 4 + 1] = 0.9;
+        grey[i * 4 + 2] = 0.9;
+        grey[i * 4 + 3] = 1;
+      }
+      applyOverlayVertexColors(overlayBrain, grey);
       onDensityRange?.({ vmin: 0, vmax: 1, hasData: false });
       return;
     }
@@ -263,12 +261,9 @@ export default function BrainKdeMesh({
     onDensityRange,
   ]);
 
-  return (
-    <>
-      <primitive object={baseBrain} />
-      <primitive object={overlayBrain} />
-    </>
-  );
+  // Render only the overlay: it now covers the whole surface (grey where no density), so a
+  // separate base brain would only z-fight and reintroduce the two-material seam.
+  return <primitive object={overlayBrain} />;
 }
 
 useGLTF.preload(BRAIN_MESH_URL);
