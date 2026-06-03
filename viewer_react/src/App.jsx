@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Activity, Brain, Info } from 'lucide-react';
-import { PHASES } from './constants/phases.js';
+import { PHASES, defaultPhaseBounds } from './constants/phases.js';
 import { VENN_MAX_PHASES, VENN_MIN_PHASES } from './constants/venn.js';
 import { DEFAULT_BRAIN_VIEW_MODE } from './constants/brain.js';
 import usePhaseOverlapData from './hooks/usePhaseOverlapData.js';
@@ -27,6 +27,16 @@ export default function App() {
   const [windowSec, setWindowSec] = useState(ANIM_WINDOW_SEC);
   const [kdeBandwidth, setKdeBandwidth] = useState(KDE_BANDWIDTH);
   const [kdeMaxDistance, setKdeMaxDistance] = useState(KDE_MAX_DISTANCE);
+  // Animation: show only electrodes significant in the current window, or all significant.
+  const [sigWindowOnly, setSigWindowOnly] = useState(true);
+  // Per-phase time-course x-axis bounds (user overrides; defaults fill the rest).
+  const [phaseBounds, setPhaseBounds] = useState({});
+  const setPhaseBound = useCallback((phase, key, value) => {
+    setPhaseBounds((prev) => ({
+      ...prev,
+      [phase]: { ...(prev[phase] ?? defaultPhaseBounds(phase)), [key]: Number(value) },
+    }));
+  }, []);
   const [brainViewMode, setBrainViewMode] = useState(DEFAULT_BRAIN_VIEW_MODE);
   const [kdeFrameCacheStatus, setKdeFrameCacheStatus] = useState({ ready: true, progress: 1 });
   const [kdePreRenderToken, setKdePreRenderToken] = useState(0);
@@ -121,6 +131,7 @@ export default function App() {
     kdeRenderRequired,
     kdeFrameCacheStatus,
     windowSec: Number(windowSec) || ANIM_WINDOW_SEC,
+    gateByWindow: sigWindowOnly,
     onKdeRenderStart: handleKdeRenderStart,
   });
 
@@ -145,6 +156,18 @@ export default function App() {
   const canPlay = tableElectrodes.length > 0
     && !selectionEmpty
     && (data?.layout === 'split' || !tracesLoading);
+
+  // Time-course x-axis bounds per Venn member. Phase axis -> the member's own phase bounds;
+  // condition axis -> all members share the fixed phase's bounds.
+  const memberBounds = useMemo(() => {
+    if (!spec) return null;
+    const out = {};
+    (vennMembers || []).forEach((member) => {
+      const phaseKey = spec.axis === 'condition' ? spec.fixedPhase : member;
+      out[member] = phaseBounds[phaseKey] ?? defaultPhaseBounds(phaseKey);
+    });
+    return out;
+  }, [spec, vennMembers, phaseBounds]);
 
   if (isInitialLoading) {
     return (
@@ -186,12 +209,6 @@ export default function App() {
       <header className="topbar">
         <h1 className="topbar-title"><Brain size={20} /> HGA viewer</h1>
         <div className="topbar-controls">
-          <VariantSelector
-            spec={spec}
-            options={variantOptions}
-            loading={variantLoading}
-            onChange={updateVariant}
-          />
           <SettingsPanel
             windowSec={windowSec}
             onWindowSec={setWindowSec}
@@ -199,6 +216,11 @@ export default function App() {
             onKdeBandwidth={setKdeBandwidth}
             kdeMaxDistance={kdeMaxDistance}
             onKdeMaxDistance={setKdeMaxDistance}
+            sigWindowOnly={sigWindowOnly}
+            onSigWindowOnly={setSigWindowOnly}
+            phases={data.metadata?.phases ?? []}
+            phaseBounds={phaseBounds}
+            onPhaseBound={setPhaseBound}
           />
         </div>
       </header>
@@ -208,6 +230,12 @@ export default function App() {
           <PanelTitle
             icon={<Activity size={18} />}
             title={`${spec?.axis === 'condition' ? 'Condition' : 'Phase'} overlap selector`}
+          />
+          <VariantSelector
+            spec={spec}
+            options={variantOptions}
+            loading={variantLoading}
+            onChange={updateVariant}
           />
           <VennPanel
             vennPhases={vennPhases}
@@ -305,6 +333,7 @@ export default function App() {
           traces={data.traces || {}}
           variantKey={spec ? JSON.stringify(spec) : 'v'}
           electrodesKey={tableElectrodesKey}
+          memberBounds={memberBounds}
           layout={data.layout}
           tracesLoading={tracesLoading}
           tracesLoadProgress={tracesLoadProgress}

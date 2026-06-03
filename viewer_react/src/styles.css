@@ -37,7 +37,7 @@ button, input {
   grid-template-areas:
     "top   top   top"
     "venn  brain detail"
-    "wave  wave  detail";
+    "venn  wave  detail";
   gap: 8px;
   padding: 10px 12px;
   overflow: hidden;
@@ -46,7 +46,7 @@ button, input {
 /* The detail (Selection details) panel runs full height on the right; the waveform
    strip sits under venn+brain (narrower than full width). */
 .topbar { grid-area: top; }
-.venn-panel { grid-area: venn; }
+.venn-panel { grid-area: venn; overflow-y: auto; }
 .brain-panel { grid-area: brain; }
 .detail-panel { grid-area: detail; }
 .waveform-panel { grid-area: wave; }
@@ -230,6 +230,57 @@ h1 {
 .settings-field-hint {
   font-size: 11px;
   color: #94a3b8;
+}
+
+.settings-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.3;
+}
+
+.settings-checkbox input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.settings-bounds-row {
+  display: grid;
+  grid-template-columns: 1fr 54px 10px 54px;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-bounds-label {
+  font-size: 12px;
+  color: #334155;
+}
+
+.settings-bounds-row input {
+  border: 1px solid #dbe4ef;
+  border-radius: 6px;
+  padding: 3px 5px;
+  font-size: 12px;
+  width: 100%;
+}
+
+.settings-bounds-dash {
+  text-align: center;
+  color: #94a3b8;
+}
+
+/* The variant selector now lives in the left panel: stack its chip groups vertically. */
+.venn-panel .variant-selector {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  gap: 6px;
+}
+
+.venn-panel .variant-selector .load-selector {
+  justify-content: flex-start;
 }
 
 /* Wrapper dissolves into the app-shell grid so venn/brain/detail place via grid-area. */
