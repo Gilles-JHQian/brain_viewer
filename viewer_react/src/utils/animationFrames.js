@@ -79,7 +79,9 @@ export function buildSlidingWindowFrames(
   traces,
   phase,
   selectedLoad,
-  { windowSec = ANIM_WINDOW_SEC, stepSec = ANIM_STEP_SEC, allowMock = false } = {},
+  {
+    windowSec = ANIM_WINDOW_SEC, stepSec = ANIM_STEP_SEC, allowMock = false, gateByWindow = true,
+  } = {},
 ) {
   const { min, max } = PHASE_TIME_RANGES[phase];
   const tEnd = max - windowSec;
@@ -88,8 +90,9 @@ export function buildSlidingWindowFrames(
   for (let t = min; t <= tEnd + 1e-9; t += stepSec) {
     const hgaByElectrodeId = {};
     electrodes.forEach((electrode) => {
-      // Only include electrodes with a significant cluster in this window.
-      if (!isSignificantInWindow(traces, electrode, phase, t, t + windowSec)) return;
+      // Only include electrodes with a significant cluster in this window (unless the
+      // "show all significant" mode is on, where every selected electrode is shown).
+      if (gateByWindow && !isSignificantInWindow(traces, electrode, phase, t, t + windowSec)) return;
       const mean = causalWindowMeanForElectrode(
         traces,
         electrode,
