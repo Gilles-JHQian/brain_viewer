@@ -8,6 +8,10 @@ fsaverage pial mesh (brain_mesh.json) into a binary glTF (.glb) with a numpy-onl
 writer (no trimesh dependency).
 
 Usage:
+    # With no args it uses the in-repo defaults (see DEFAULT_* below):
+    python build_viewer_assets.py
+
+    # Or override any path explicitly:
     python build_viewer_assets.py \
         --data-dir   /path/to/brain_viewer_data \
         --assets-dir /path/to/viewer_react/public/assets \
@@ -25,6 +29,18 @@ import numpy as np
 # is config-driven, so listing a phase is all that's required).
 PRIMARY_PHASES = ["Stimulus", "Delay", "Response"]
 DEFAULT_VENN_PHASES = ["Stimulus", "Delay", "Response"]
+
+# Default paths, resolved from this script's location so the tool runs with no args
+# from any cwd. Layout: <lexical_access>/brain_viewer/build_viewer_assets.py with the
+# data tree at <lexical_access>/brain_viewer_data and the React viewer's served files
+# under brain_viewer/viewer_react/public/{assets,data}.
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(HERE)  # lexical_access/
+DEFAULT_DATA_DIR = os.path.join(REPO_ROOT, "brain_viewer_data")
+DEFAULT_VIEWER_PUBLIC = os.path.join(HERE, "viewer_react", "public")
+DEFAULT_ASSETS_DIR = os.path.join(DEFAULT_VIEWER_PUBLIC, "assets")
+DEFAULT_MANIFEST = os.path.join(DEFAULT_VIEWER_PUBLIC, "data", "manifest.json")
+DEFAULT_CONFIG = os.path.join(HERE, "prepare_dataset_config.json")
 
 
 # --------------------------------------------------------------------------- GLB
@@ -224,11 +240,14 @@ def build_manifest(data_dir, references, conditions, diff_types, phases,
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--data-dir", required=True, help="existing brain_viewer_data dir")
-    ap.add_argument("--assets-dir", required=True, help="viewer public/assets dir for the GLB")
-    ap.add_argument("--manifest", required=True, help="output manifest.json path")
-    ap.add_argument("--config", default=os.path.join(os.path.dirname(__file__),
-                                                      "prepare_dataset_config.json"))
+    ap.add_argument("--data-dir", default=DEFAULT_DATA_DIR,
+                    help="existing brain_viewer_data dir (default: %(default)s)")
+    ap.add_argument("--assets-dir", default=DEFAULT_ASSETS_DIR,
+                    help="viewer public/assets dir for the GLB (default: %(default)s)")
+    ap.add_argument("--manifest", default=DEFAULT_MANIFEST,
+                    help="output manifest.json path (default: %(default)s)")
+    ap.add_argument("--config", default=DEFAULT_CONFIG,
+                    help="prepare_dataset_config.json (default: %(default)s)")
     ap.add_argument("--phases", nargs="+", default=PRIMARY_PHASES)
     args = ap.parse_args()
 
