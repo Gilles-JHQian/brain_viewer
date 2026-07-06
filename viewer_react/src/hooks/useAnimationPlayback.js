@@ -22,6 +22,7 @@ export default function useAnimationPlayback({
   memberBounds = null,
   panelPhases = [],
   selectedMapCondition = null,
+  playbackSpeed = 1,
   onKdeRenderStart,
 }) {
   const [playingPhase, setPlayingPhase] = useState(null);
@@ -204,6 +205,8 @@ export default function useAnimationPlayback({
       return undefined;
     }
 
+    // Per-frame interval scaled by the playback speed (0.5x -> twice as slow).
+    const stepMs = ANIM_STEP_MS / (playbackSpeed || 1);
     let rafId = null;
     let lastTimestamp = null;
     let accumulator = 0;
@@ -217,8 +220,8 @@ export default function useAnimationPlayback({
       accumulator += timestamp - lastTimestamp;
       lastTimestamp = timestamp;
 
-      if (accumulator >= ANIM_STEP_MS) {
-        accumulator %= ANIM_STEP_MS;
+      if (accumulator >= stepMs) {
+        accumulator %= stepMs;
         setAnimationFrameIdx((current) => {
           if (current >= bundle.frames.length - 1) {
             setIsPlaying(false);
@@ -236,7 +239,7 @@ export default function useAnimationPlayback({
       stopped = true;
       if (rafId != null) window.cancelAnimationFrame(rafId);
     };
-  }, [isPlaying, playingPhase, cacheVersion, getCachedBundle]);
+  }, [isPlaying, playingPhase, cacheVersion, getCachedBundle, playbackSpeed]);
 
   const beginPlayback = useCallback((phase) => {
     setPlayingPhase(phase);

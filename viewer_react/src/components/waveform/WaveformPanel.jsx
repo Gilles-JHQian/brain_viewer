@@ -14,6 +14,9 @@ import PanelEmptyState from '../layout/PanelEmptyState.jsx';
 // The bottom trace shows a little context beyond the (animation) bounds front and back.
 const TRACE_BOUNDS_MARGIN_SEC = 0.1;
 
+// Selectable playback speed multipliers for the time-course animation.
+const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2];
+
 const StaticWaveformBody = React.memo(function StaticWaveformBody({
   phase,
   phaseLabel,
@@ -157,6 +160,8 @@ function WaveformPanel({
   gate = true,
   overlayIsDiff = false,
   expandable = false,
+  playbackSpeed = 1,
+  onPlaybackSpeed,
   variantKey = null,
   electrodesKey = '',
   memberBounds = null,
@@ -298,6 +303,19 @@ function WaveformPanel({
             ))}
           </div>
         )}
+        <div className="load-selector waveform-speed-picker">
+          <span className="load-selector-label">Speed</span>
+          {PLAYBACK_SPEEDS.map((speed) => (
+            <button
+              key={speed}
+              type="button"
+              className={playbackSpeed === speed ? 'load-chip active' : 'load-chip'}
+              onClick={() => onPlaybackSpeed?.(speed)}
+            >
+              {speed}×
+            </button>
+          ))}
+        </div>
         {canExpand && (
           <div className="load-selector waveform-expand-picker">
             <span className="load-selector-label">Show</span>

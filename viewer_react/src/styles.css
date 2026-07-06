@@ -1625,7 +1625,8 @@ h1 {
 }
 
 .waveform-phase-picker,
-.waveform-expand-picker {
+.waveform-expand-picker,
+.waveform-speed-picker {
   flex-wrap: wrap;
 }
 

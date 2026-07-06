@@ -37,6 +37,8 @@ export default function App() {
   const [kdeMaxDistance, setKdeMaxDistance] = useState(KDE_MAX_DISTANCE);
   // Animation: show only electrodes significant in the current window, or all significant.
   const [sigWindowOnly, setSigWindowOnly] = useState(true);
+  // Time-course playback speed multiplier (1x = ANIM_STEP_SEC per frame).
+  const [playbackSpeed, setPlaybackSpeed] = useState(0.5);
   // Per-phase time-course x-axis bounds (user overrides; defaults fill the rest).
   const [phaseBounds, setPhaseBounds] = useState({});
   const setPhaseBound = useCallback((phase, key, value) => {
@@ -243,6 +245,7 @@ export default function App() {
     memberBounds: panelPhaseBounds,
     panelPhases: activePanelPhases,
     selectedMapCondition: activeMapCondition,
+    playbackSpeed,
     onKdeRenderStart: handleKdeRenderStart,
   });
 
@@ -483,6 +486,8 @@ export default function App() {
           onTogglePanelPhase={togglePanelPhase}
           overlayIsDiff={spec?.datatype === 'diff'}
           expandable={spec?.datatype === 'diff' && gridHasCondition}
+          playbackSpeed={playbackSpeed}
+          onPlaybackSpeed={setPlaybackSpeed}
           variantKey={spec ? JSON.stringify(spec) : 'v'}
           electrodesKey={tableElectrodesKey}
           memberBounds={panelPhaseBounds}
