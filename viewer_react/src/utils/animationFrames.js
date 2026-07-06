@@ -84,17 +84,17 @@ export function buildSlidingWindowFrames(
     gateByWindow = true, bounds = null,
   } = {},
 ) {
-  // The animation sweeps across the (cropped) bounds for this phase.
+  // The cursor sweeps the full [min, max] bounds for this phase; each frame's window
+  // TRAILS the cursor, i.e. the cursor marks the window END: window = [t - windowSec, t].
   const { min, max } = bounds ?? PHASE_TIME_RANGES[phase] ?? { min: -1, max: 2 };
-  const tEnd = max - windowSec;
   const frames = [];
 
-  for (let t = min; t <= tEnd + 1e-9; t += stepSec) {
+  for (let t = min; t <= max + 1e-9; t += stepSec) {
     const hgaByElectrodeId = {};
     electrodes.forEach((electrode) => {
       // Only include electrodes with a significant cluster in this window (unless the
       // "show all significant" mode is on, where every selected electrode is shown).
-      if (gateByWindow && !isSignificantInWindow(traces, electrode, phase, t, t + windowSec)) return;
+      if (gateByWindow && !isSignificantInWindow(traces, electrode, phase, t - windowSec, t)) return;
       const mean = causalWindowMeanForElectrode(
         traces,
         electrode,

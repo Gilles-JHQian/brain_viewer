@@ -303,8 +303,9 @@ export function windowMean(trace, t0, t1) {
 }
 
 export function causalWindowMeanForElectrode(traces, electrode, phase, selectedLoad, time, windowSec, allowMock = false) {
-  const t0 = time;
-  const t1 = time + windowSec;
+  // `time` is the cursor = window END; the causal averaging window trails behind it.
+  const t0 = time - windowSec;
+  const t1 = time;
   const phaseTraces = traces?.[electrode?.id]?.[phase];
   if (selectedLoad === 'all' && phaseTraces && Object.keys(phaseTraces).length > 0) {
     const loadMeans = Object.values(phaseTraces)
