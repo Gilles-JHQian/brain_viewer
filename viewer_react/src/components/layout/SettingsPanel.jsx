@@ -25,6 +25,8 @@ export default function SettingsPanel({
   kdeBandwidth, onKdeBandwidth,
   kdeMaxDistance, onKdeMaxDistance,
   sigWindowOnly, onSigWindowOnly,
+  showReferenceSelector, onShowReferenceSelector,
+  showVennOverSelector, onShowVennOverSelector,
   colorDirection, onColorDirection,
   brainOpacity, onBrainOpacity,
   electrodeSizeScale, onElectrodeSizeScale,
@@ -76,6 +78,23 @@ export default function SettingsPanel({
               onChange={(event) => onSigWindowOnly?.(event.target.checked)}
             />
             <span>Show only electrodes significant in the current window</span>
+          </label>
+          <div className="settings-section-title">Selector panels</div>
+          <label className="settings-checkbox">
+            <input
+              type="checkbox"
+              checked={showReferenceSelector !== false}
+              onChange={(event) => onShowReferenceSelector?.(event.target.checked)}
+            />
+            <span>Show the Reference selector</span>
+          </label>
+          <label className="settings-checkbox">
+            <input
+              type="checkbox"
+              checked={showVennOverSelector !== false}
+              onChange={(event) => onShowVennOverSelector?.(event.target.checked)}
+            />
+            <span>Show the Venn-over (phase/condition) selector</span>
           </label>
           <div className="settings-section-title">Brain map</div>
           <div className="settings-segment">

@@ -42,6 +42,9 @@ export default function App() {
     }));
   }, []);
   const [brainViewMode, setBrainViewMode] = useState(DEFAULT_BRAIN_VIEW_MODE);
+  // Left "Condition overlap selector" panel visibility (toggled in Settings to declutter).
+  const [showReferenceSelector, setShowReferenceSelector] = useState(true);
+  const [showVennOverSelector, setShowVennOverSelector] = useState(true);
   // Brain-map display controls (moved out of the brain toolbar into Settings).
   const [colorDirection, setColorDirection] = useState('one'); // 'one' | 'two'
   const [brainOpacity, setBrainOpacity] = useState(DEFAULT_ELECTRODE_BRAIN_OPACITY);
@@ -249,6 +252,10 @@ export default function App() {
             onKdeMaxDistance={setKdeMaxDistance}
             sigWindowOnly={sigWindowOnly}
             onSigWindowOnly={setSigWindowOnly}
+            showReferenceSelector={showReferenceSelector}
+            onShowReferenceSelector={setShowReferenceSelector}
+            showVennOverSelector={showVennOverSelector}
+            onShowVennOverSelector={setShowVennOverSelector}
             colorDirection={colorDirection}
             onColorDirection={setColorDirection}
             brainOpacity={brainOpacity}
@@ -273,6 +280,8 @@ export default function App() {
             options={variantOptions}
             loading={variantLoading}
             onChange={updateVariant}
+            showReference={showReferenceSelector}
+            showVennOver={showVennOverSelector}
           />
           <VennPanel
             vennPhases={vennPhases}

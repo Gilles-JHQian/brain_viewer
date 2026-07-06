@@ -32,7 +32,9 @@ function ChipGroup({
 // Orthogonal "which dataset variant" selectors plus the Venn axis (phase vs condition).
 // These re-key the data fetch; the axis decides whether the Venn/waveform members are
 // phases (fixed condition) or conditions (fixed phase).
-export default function VariantSelector({ spec, options, loading, onChange }) {
+export default function VariantSelector({
+  spec, options, loading, onChange, showReference = true, showVennOver = true,
+}) {
   if (!spec || !options) return null;
 
   const {
@@ -48,13 +50,15 @@ export default function VariantSelector({ spec, options, loading, onChange }) {
 
   return (
     <div className="variant-selector">
-      <ChipGroup
-        icon={<Database size={14} />}
-        label="Reference"
-        options={references}
-        value={spec.reference}
-        onSelect={(reference) => onChange({ reference })}
-      />
+      {showReference && (
+        <ChipGroup
+          icon={<Database size={14} />}
+          label="Reference"
+          options={references}
+          value={spec.reference}
+          onSelect={(reference) => onChange({ reference })}
+        />
+      )}
       <ChipGroup
         icon={<Layers size={14} />}
         label="Type"
@@ -81,7 +85,7 @@ export default function VariantSelector({ spec, options, loading, onChange }) {
           onSelect={(direction) => onChange({ direction })}
         />
       )}
-      {axes?.length > 1 && (
+      {showVennOver && axes?.length > 1 && (
         <ChipGroup
           icon={<Shuffle size={14} />}
           label="Venn over"
