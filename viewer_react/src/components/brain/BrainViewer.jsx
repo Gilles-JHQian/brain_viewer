@@ -10,7 +10,6 @@ import {
   BRAIN_VIEW_OPTIONS,
   DEFAULT_BRAIN_VIEW_MODE,
   DEFAULT_ELECTRODE_BRAIN_OPACITY,
-  DEFAULT_KDE_BRAIN_OPACITY,
 } from '../../constants/brain.js';
 import {
   buildKdeSources,
@@ -38,6 +37,9 @@ export default function BrainViewer({
   selectedLoad,
   kdeBandwidth,
   kdeMaxDistance,
+  colorDirection = 'one',
+  brainOpacity = DEFAULT_ELECTRODE_BRAIN_OPACITY,
+  electrodeSizeScale = 1,
   selectedIds,
   selectedElectrodeId,
   hoveredId,
@@ -60,12 +62,9 @@ export default function BrainViewer({
   const hgaScale = metadata?.hga_size_scale;
   const [brainAssetOk, setBrainAssetOk] = useState(null);
   const [showAllElectrodes, setShowAllElectrodes] = useState(false);
-  const [brainOpacity, setBrainOpacity] = useState(DEFAULT_KDE_BRAIN_OPACITY);
   const [brainHemisphere, setBrainHemisphere] = useState('both');
   const [colorByFunctional, setColorByFunctional] = useState(true);
   const [colorMode, setColorMode] = useState('region'); // 'region' | 'hga'
-  const [colorDirection, setColorDirection] = useState('one'); // 'one' | 'two'
-  const [electrodeSizeScale, setElectrodeSizeScale] = useState(1);
   const [kdeManualMax, setKdeManualMax] = useState(''); // '' = auto
   const [brainViewMode, setBrainViewMode] = useState(DEFAULT_BRAIN_VIEW_MODE);
   const [cameraResetToken, setCameraResetToken] = useState(0);
@@ -161,12 +160,6 @@ export default function BrainViewer({
       : []),
     [useInstancedElectrodes, visibleElectrodes, selectedElectrodeId, hoveredId, visibleElectrodesKey],
   );
-
-  useEffect(() => {
-    setBrainOpacity(
-      brainViewMode === 'kde' ? DEFAULT_KDE_BRAIN_OPACITY : DEFAULT_ELECTRODE_BRAIN_OPACITY,
-    );
-  }, [brainViewMode]);
 
   useEffect(() => {
     if (brainViewMode === 'kde' && brainAssetOk === false) {
@@ -327,27 +320,6 @@ export default function BrainViewer({
               </button>
             </div>
           )}
-          {brainViewMode === 'electrodes' && colorMode === 'hga' && (
-            <div className="brain-control-pill">
-              <span className="brain-control-label">Map</span>
-              <button
-                type="button"
-                className={colorDirection === 'one' ? 'brain-chip active' : 'brain-chip'}
-                onClick={() => setColorDirection('one')}
-                title="One-way: 0 to max"
-              >
-                1-way
-              </button>
-              <button
-                type="button"
-                className={colorDirection === 'two' ? 'brain-chip active' : 'brain-chip'}
-                onClick={() => setColorDirection('two')}
-                title="Two-way diverging: ±max"
-              >
-                2-way
-              </button>
-            </div>
-          )}
           <button
             type="button"
             className="brain-chip brain-reset-btn"
@@ -366,34 +338,6 @@ export default function BrainViewer({
             {showAllElectrodes ? 'Selected only' : 'Show all'}
           </button>
         </div>
-        <label className="brain-opacity-control">
-          <span className="brain-opacity-label">Opacity</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={Math.round(brainOpacity * 100)}
-            onChange={(event) => setBrainOpacity(Number(event.target.value) / 100)}
-            aria-valuetext={`${Math.round(brainOpacity * 100)} percent`}
-          />
-          <span className="brain-opacity-value">{Math.round(brainOpacity * 100)}%</span>
-        </label>
-        {brainViewMode === 'electrodes' && (
-          <label className="brain-opacity-control">
-            <span className="brain-opacity-label">Size</span>
-            <input
-              type="range"
-              min={50}
-              max={250}
-              step={5}
-              value={Math.round(electrodeSizeScale * 100)}
-              onChange={(event) => setElectrodeSizeScale(Number(event.target.value) / 100)}
-              aria-valuetext={`${electrodeSizeScale.toFixed(2)}x`}
-            />
-            <span className="brain-opacity-value">{electrodeSizeScale.toFixed(1)}x</span>
-          </label>
-        )}
       </div>
       {brainViewMode === 'kde' && (
         <div className="kde-colorbar-stack">

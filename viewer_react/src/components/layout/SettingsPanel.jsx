@@ -25,6 +25,9 @@ export default function SettingsPanel({
   kdeBandwidth, onKdeBandwidth,
   kdeMaxDistance, onKdeMaxDistance,
   sigWindowOnly, onSigWindowOnly,
+  colorDirection, onColorDirection,
+  brainOpacity, onBrainOpacity,
+  electrodeSizeScale, onElectrodeSizeScale,
   phases = [], phaseBounds = {}, onPhaseBound,
 }) {
   const [open, setOpen] = useState(false);
@@ -73,6 +76,52 @@ export default function SettingsPanel({
               onChange={(event) => onSigWindowOnly?.(event.target.checked)}
             />
             <span>Show only electrodes significant in the current window</span>
+          </label>
+          <div className="settings-section-title">Brain map</div>
+          <div className="settings-segment">
+            <span className="settings-segment-label">HGA colormap</span>
+            <div className="settings-segment-buttons">
+              <button
+                type="button"
+                className={colorDirection === 'one' ? 'active' : ''}
+                onClick={() => onColorDirection?.('one')}
+                title="One-way: 0 to max"
+              >
+                1-way
+              </button>
+              <button
+                type="button"
+                className={colorDirection === 'two' ? 'active' : ''}
+                onClick={() => onColorDirection?.('two')}
+                title="Two-way diverging: ±max"
+              >
+                2-way
+              </button>
+            </div>
+          </div>
+          <label className="settings-slider">
+            <span className="settings-slider-label">Brain opacity</span>
+            <span className="settings-slider-value">{Math.round((brainOpacity ?? 0) * 100)}%</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={Math.round((brainOpacity ?? 0) * 100)}
+              onChange={(event) => onBrainOpacity?.(Number(event.target.value) / 100)}
+            />
+          </label>
+          <label className="settings-slider">
+            <span className="settings-slider-label">Electrode size</span>
+            <span className="settings-slider-value">{(electrodeSizeScale ?? 1).toFixed(1)}x</span>
+            <input
+              type="range"
+              min={50}
+              max={250}
+              step={5}
+              value={Math.round((electrodeSizeScale ?? 1) * 100)}
+              onChange={(event) => onElectrodeSizeScale?.(Number(event.target.value) / 100)}
+            />
           </label>
           <div className="settings-section-title">KDE projection</div>
           <NumberField

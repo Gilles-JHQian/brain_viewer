@@ -1,8 +1,12 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, Brain, Info, FlaskConical } from 'lucide-react';
 import { PHASES, defaultPhaseBounds } from './constants/phases.js';
 import { VENN_MAX_PHASES, VENN_MIN_PHASES } from './constants/venn.js';
-import { DEFAULT_BRAIN_VIEW_MODE } from './constants/brain.js';
+import {
+  DEFAULT_BRAIN_VIEW_MODE,
+  DEFAULT_ELECTRODE_BRAIN_OPACITY,
+  DEFAULT_KDE_BRAIN_OPACITY,
+} from './constants/brain.js';
 import usePhaseOverlapData from './hooks/usePhaseOverlapData.js';
 import useSelectionPipeline from './hooks/useSelectionPipeline.js';
 import useAnimationPlayback from './hooks/useAnimationPlayback.js';
@@ -38,6 +42,16 @@ export default function App() {
     }));
   }, []);
   const [brainViewMode, setBrainViewMode] = useState(DEFAULT_BRAIN_VIEW_MODE);
+  // Brain-map display controls (moved out of the brain toolbar into Settings).
+  const [colorDirection, setColorDirection] = useState('one'); // 'one' | 'two'
+  const [brainOpacity, setBrainOpacity] = useState(DEFAULT_ELECTRODE_BRAIN_OPACITY);
+  const [electrodeSizeScale, setElectrodeSizeScale] = useState(1);
+  // Opacity default differs by view mode; reset it on mode change (matches prior in-viewer behavior).
+  useEffect(() => {
+    setBrainOpacity(
+      brainViewMode === 'kde' ? DEFAULT_KDE_BRAIN_OPACITY : DEFAULT_ELECTRODE_BRAIN_OPACITY,
+    );
+  }, [brainViewMode]);
   const [kdeFrameCacheStatus, setKdeFrameCacheStatus] = useState({ ready: true, progress: 1 });
   const [kdePreRenderToken, setKdePreRenderToken] = useState(0);
 
@@ -235,6 +249,12 @@ export default function App() {
             onKdeMaxDistance={setKdeMaxDistance}
             sigWindowOnly={sigWindowOnly}
             onSigWindowOnly={setSigWindowOnly}
+            colorDirection={colorDirection}
+            onColorDirection={setColorDirection}
+            brainOpacity={brainOpacity}
+            onBrainOpacity={setBrainOpacity}
+            electrodeSizeScale={electrodeSizeScale}
+            onElectrodeSizeScale={setElectrodeSizeScale}
             phases={data.metadata?.phases ?? []}
             phaseBounds={phaseBounds}
             onPhaseBound={setPhaseBound}
@@ -297,6 +317,9 @@ export default function App() {
             selectedLoad={selectedLoad}
             kdeBandwidth={Number(kdeBandwidth) || KDE_BANDWIDTH}
             kdeMaxDistance={Number(kdeMaxDistance) || KDE_MAX_DISTANCE}
+            colorDirection={colorDirection}
+            brainOpacity={brainOpacity}
+            electrodeSizeScale={electrodeSizeScale}
             selectedIds={roiFilteredIds}
             selectedElectrodeId={selectedElectrodeId}
             hoveredId={hoveredId}

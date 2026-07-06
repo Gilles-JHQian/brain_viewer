@@ -267,6 +267,70 @@ h1 {
   color: #94a3b8;
 }
 
+.settings-segment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-segment-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.settings-segment-buttons {
+  display: inline-flex;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.settings-segment-buttons button {
+  border: none;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.settings-segment-buttons button + button {
+  border-left: 1px solid #dbe4ef;
+}
+
+.settings-segment-buttons button.active {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.settings-slider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 3px 8px;
+}
+
+.settings-slider-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.settings-slider-value {
+  font-size: 12px;
+  color: #64748b;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-slider input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
 /* The variant selector now lives in the left panel: stack its chip groups vertically. */
 .venn-panel .variant-selector {
   flex-direction: column;
