@@ -181,9 +181,19 @@ function buildVariantTraces(phasePayloads, phases, labels = null) {
 }
 
 // The members of the Venn/waveform for a spec: phases (axis='phase') or conditions
-// (axis='condition').
+// (axis='condition'). A diff type may define only a subset of phases (e.g. UP's
+// lexicality omits the pre-stimulus Cue), so restrict phase-axis members to that
+// subset when present — otherwise the omitted phase shows up as an empty member.
 export function specMembers(metadata, spec) {
-  return spec.axis === 'condition' ? (metadata.conditions || []) : (metadata.phases || []);
+  if (spec.axis === 'condition') return metadata.conditions || [];
+  const phases = metadata.phases || [];
+  if (spec.datatype === 'diff') {
+    const diffPhases = metadata.diff_types?.[spec.diffType]?.phases;
+    if (Array.isArray(diffPhases) && diffPhases.length) {
+      return phases.filter((phase) => diffPhases.includes(phase));
+    }
+  }
+  return phases;
 }
 
 // A reasonable default spec: condition-overlap (Venn over conditions) at the first phase,

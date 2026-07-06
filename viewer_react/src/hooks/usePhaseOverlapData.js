@@ -303,11 +303,18 @@ export default function usePhaseOverlapData() {
   // --- variant selector options (consumed by the top-bar VariantSelector) ---
   const variantOptions = useMemo(() => {
     if (!isVariantLayout || !metadata || !spec) return null;
+    // For a diff whose config restricts phases, only offer those as the fixed phase.
+    const diffPhases = spec.datatype === 'diff'
+      ? diffTypesMeta?.[spec.diffType]?.phases
+      : null;
+    const phaseOptions = (Array.isArray(diffPhases) && diffPhases.length)
+      ? (metadata.phases ?? []).filter((phase) => diffPhases.includes(phase))
+      : (metadata.phases ?? []);
     return {
       references: metadata.references ?? [],
       datatypes: metadata.datatypes ?? ['zscore', 'diff'],
       conditions: metadata.conditions ?? [],
-      phases: metadata.phases ?? [],
+      phases: phaseOptions,
       diffTypes: Object.keys(diffTypesMeta),
       diffTypesMeta,
       // Always expose both axes; condition-overlap is disabled (not hidden) when the
@@ -330,6 +337,12 @@ export default function usePhaseOverlapData() {
         }
         const dirs = diffTypesMeta[next.diffType]?.directions ?? [];
         if (!dirs.includes(next.direction)) next.direction = dirs[0] ?? null;
+        // A diff type may cover only a subset of phases (e.g. UP lexicality omits
+        // Cue); keep the fixed phase valid so the view isn't empty on switch.
+        const dphases = diffTypesMeta[next.diffType]?.phases;
+        if (Array.isArray(dphases) && dphases.length && !dphases.includes(next.fixedPhase)) {
+          next.fixedPhase = dphases[0];
+        }
       }
       if (!datatypeHasCondition(next.datatype, next.diffType)) {
         next.axis = 'phase';
