@@ -1,0 +1,19 @@
+{
+  "paths": {
+    "bids_root": "/cwork/jq81/cogan_lab_box/CoganLab/BIDS-1.2_Uniqueness_point/BIDS",
+    "subjects_dir": "/hpc/home/jq81/cogan_lab/jq81/freesurfer/subjects",
+    "recon_dir": "/cwork/jq81/cogan_lab_box/ECoG_Recon",
+    "derivatives_root": null,
+    "statistics_root": null,
+    "stim_properties_path": "stim_properties.json"
+  },
+  "data": {
+    "task": "UniquenessPoint",
+    "band": "highgamma",
+    "references": ["car"],
+    "phases": ["Cue", "Stimulus", "UP", "Delay", "Response"],
+    "conditions": ["Decision", "Passive", "Repeat"],
+    "diff_types": {}
+  },
+  "mesh_decimate_target": 50000
+}

@@ -126,6 +126,12 @@ def load_config(config_path: Optional[str] = None) -> dict:
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"Failed to parse config file {path}: {exc}") from exc
         _deep_update(config, overrides)
+        # An explicit ``data.diff_types`` in the config file REPLACES the default
+        # set rather than deep-merging with it, so ``{}`` disables all diff
+        # export (e.g. HGA-only datasets such as UniquenessPoint).
+        override_data = overrides.get("data")
+        if isinstance(override_data, dict) and "diff_types" in override_data:
+            config.setdefault("data", {})["diff_types"] = override_data["diff_types"]
     else:
         if path:
             warnings.warn(f"Config file {path} not found. Falling back to defaults.")
@@ -771,10 +777,12 @@ def _load_statistics_sig(subject: str, phase: str, condition: Optional[str] = No
 
 def _load_statistics_mask(subject: str, phase: str, condition: Optional[str] = None,
                           direction: Optional[str] = None,
-                          diff_type: Optional[str] = None) -> Optional[Tuple[List[str], np.ndarray]]:
+                          diff_type: Optional[str] = None
+                          ) -> Optional[Tuple[List[str], np.ndarray, Optional[np.ndarray]]]:
     """
-    Load mask and ch_names from a statistics H5 file.
-    Returns (ch_names, mask) or None.
+    Load mask, ch_names and (when present) the mask time axis from a statistics
+    H5 file. Returns (ch_names, mask, times) or None. ``times`` is None when the
+    file does not store a time axis (older statistics).
     """
     h5_path = _get_statistics_h5_path(subject, phase, condition, direction, diff_type)
     if h5_path is None or not os.path.exists(h5_path):
@@ -786,7 +794,8 @@ def _load_statistics_mask(subject: str, phase: str, condition: Optional[str] = N
                 for n in f['ch_names'][:]
             ]
             mask = f['mask'][:]
-            return ch_names, mask
+            stat_times = f['times'][:] if 'times' in f else None
+            return ch_names, mask, stat_times
     except Exception as e:
         warnings.warn(f"Could not load statistics mask from {h5_path}: {e}")
     return None
@@ -845,26 +854,25 @@ def _build_sig_mask(all_ch_names: List[str], n_times: int,
     Build a significance mask aligned with all_ch_names.
     Returns (n_electrodes, n_times) mask, or None if no stats available.
 
-    The statistics mask is computed on a cropped time window
-    (Cue/Stimulus: [0, 0.75], Response: [-0.5, 0.5]).
-    When ``times`` is provided the mask is placed at the correct offset
-    within the full epoch time array.
+    Each statistics H5 mask is aligned onto the full epoch time axis using the
+    file's own stored ``times``: newer statistics store a full-length,
+    epoch-aligned mask (offset 0), while older statistics store a mask cropped
+    to a per-phase window, whose ``times`` place it at the correct offset. When
+    a file stores no time axis, the legacy per-phase ``stat_windows`` fallback
+    is used (Cue/Stimulus: [0, 0.75], Response: [-0.5, 0.5]).
     """
     n_electrodes = len(all_ch_names)
     combined_mask = np.zeros((n_electrodes, n_times), dtype=np.int64)
     any_loaded = False
 
-    # Determine the time offset for the statistics window
+    # Legacy fallback windows, used only when a statistics H5 file has no
+    # stored time axis to align against.
     stat_windows = {
         'Cue':      (0.0, 0.75),
         'Stimulus': (0.0, 0.75),
         'Delay':    (0.0, 0.5),
         'Response': (-0.5, 0.5),
     }
-    offset = 0
-    if times is not None and phase in stat_windows:
-        tmin_stat = stat_windows[phase][0]
-        offset = int(np.searchsorted(times, tmin_stat))
 
     # Group channels by subject
     subject_channels = {}
@@ -878,8 +886,16 @@ def _build_sig_mask(all_ch_names: List[str], n_times: int,
         result = _load_statistics_mask(subj, phase, condition, direction, diff_type)
         if result is None:
             continue
-        h5_ch_names, h5_mask = result
+        h5_ch_names, h5_mask, stat_times = result
         h5_ch_to_idx = {name: idx for idx, name in enumerate(h5_ch_names)}
+
+        # Align this file's mask onto the full epoch time axis.
+        offset = 0
+        if times is not None and stat_times is not None and len(stat_times):
+            offset = int(np.searchsorted(times, float(stat_times[0])))
+        elif times is not None and phase in stat_windows:
+            offset = int(np.searchsorted(times, stat_windows[phase][0]))
+        offset = max(0, offset)
 
         for ch_name, global_idx in ch_list:
             if ch_name in h5_ch_to_idx:
