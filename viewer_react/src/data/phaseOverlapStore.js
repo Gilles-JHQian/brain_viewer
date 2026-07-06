@@ -34,6 +34,9 @@ class LruCache {
 
 const traceCache = new LruCache(TRACE_CACHE_MAX);
 const animationCache = new LruCache(TRACE_CACHE_MAX * 4);
+// Per-file cache for the phase x condition grid (keyed by full fetch URL), so toggling
+// which phases the time-course panel shows never refetches already-loaded cells.
+const gridFileCache = new LruCache(64);
 
 // Base URL under which the active task's data files live (manifest + per-reference
 // zscore/electrode JSON). Switched per task via setDataBase(); every fetch below is
@@ -83,6 +86,7 @@ export function setDataBase(base) {
   variantElectrodeCache.map.clear();
   traceCache.map.clear();
   animationCache.map.clear();
+  gridFileCache.map.clear();
 }
 
 async function loadReferenceElectrodes(manifest, reference) {
@@ -227,6 +231,125 @@ export async function loadVariant(manifest, spec) {
   const traces = buildVariantTraces(payloads, members, labels);
   const { electrodes, hgaScale } = attachElectrodeHga(flagged, traces, members);
   return { spec, members, reference: spec.reference, electrodes, traces, hgaScale };
+}
+
+// ------------------------------------------------------ phase x condition grid
+// The time-course panel and the brain-map condition selector need EVERY (phase,
+// condition) cell of the active spec simultaneously (not one axis-slice like
+// loadVariant). These helpers load that full grid once per spec and re-slice it.
+
+// The condition axis is meaningful for zscore and for diffs that carry a condition
+// dimension; a condition-diff (needs_condition=false) contrasts conditions itself, so
+// it collapses to a single synthetic member -> one line/phase.
+export function gridAxesForSpec(metadata, spec) {
+  const diffMeta = metadata?.diff_types || {};
+  const allPhases = metadata?.phases || [];
+  let phases = allPhases;
+  if (spec?.datatype === 'diff') {
+    const dphases = diffMeta?.[spec.diffType]?.phases;
+    if (Array.isArray(dphases) && dphases.length) {
+      phases = allPhases.filter((p) => dphases.includes(p));
+    }
+  }
+  const hasCondition = spec?.datatype !== 'diff' || !!diffMeta?.[spec?.diffType]?.needs_condition;
+  const conditions = hasCondition
+    ? (metadata?.conditions || [])
+    : [spec?.diffType || 'diff'];
+  return { phases, conditions, hasCondition };
+}
+
+// Parse one payload into { byChannel: { name -> traceObj }, sig: Set<name> }. Mirrors
+// buildVariantTraces' row alignment (keyed by channel name) but without the `.all` wrapper.
+function parseGridPayload(payload, labels) {
+  const { times, channel_names: names } = payload;
+  const isDiff = Array.isArray(payload.data_diff);
+  const byChannel = {};
+  (names || []).forEach((name, i) => {
+    const mask = payload.mask ? payload.mask[i] : null;
+    if (isDiff) {
+      byChannel[name] = {
+        time: times,
+        value: payload.data_diff?.[i] ?? [],
+        sem: payload.trial_sem_diff ? payload.trial_sem_diff[i] : null,
+        mask,
+        act: { value: payload.data_act?.[i] ?? [], sem: payload.trial_sem_act ? payload.trial_sem_act[i] : null },
+        bsl: { value: payload.data_bsl?.[i] ?? [], sem: payload.trial_sem_bsl ? payload.trial_sem_bsl[i] : null },
+        actLabel: labels?.[0] ?? 'Active',
+        bslLabel: labels?.[1] ?? 'Baseline',
+      };
+    } else {
+      byChannel[name] = {
+        time: times,
+        value: payload.data?.[i] ?? [],
+        sem: payload.trial_sem ? payload.trial_sem[i] : null,
+        mask,
+      };
+    }
+  });
+  return { byChannel, sig: new Set(payload.sig_channels || []) };
+}
+
+async function loadGridFile(spec, phase, condition, diffMeta) {
+  // Reuse resolveVariantFile by pinning the spec to condition-axis at this phase.
+  const path = resolveVariantFile({ ...spec, axis: 'condition', fixedPhase: phase }, condition, diffMeta);
+  const url = `${DATA_BASE}/${path}`;
+  if (gridFileCache.has(url)) return gridFileCache.get(url);
+  try {
+    const payload = await fetchJson(url);
+    gridFileCache.set(url, payload);
+    return payload;
+  } catch {
+    gridFileCache.set(url, null); // combo may not exist; cache the miss
+    return null;
+  }
+}
+
+// Load grid[electrodeId][phase][condition] = { time, value, sem, mask, [act], [bsl], labels }
+// plus sigSets[phase][condition] = Set<channelName> for the given spec.
+export async function loadConditionPhaseGrid(manifest, spec, phases, conditions) {
+  const metadata = manifest?.metadata || {};
+  const diffMeta = metadata.diff_types || {};
+  const labels = spec.datatype === 'diff'
+    ? diffDirectionLabels(diffMeta[spec.diffType], spec.direction)
+    : null;
+  const grid = {};
+  const sigSets = {};
+  const cells = [];
+  phases.forEach((phase) => {
+    sigSets[phase] = {};
+    conditions.forEach((condition) => cells.push({ phase, condition }));
+  });
+  await Promise.all(cells.map(async ({ phase, condition }) => {
+    const payload = await loadGridFile(spec, phase, condition, diffMeta);
+    if (!payload) {
+      sigSets[phase][condition] = new Set();
+      return;
+    }
+    const { byChannel, sig } = parseGridPayload(payload, labels);
+    sigSets[phase][condition] = sig;
+    Object.entries(byChannel).forEach(([name, traceObj]) => {
+      if (!grid[name]) grid[name] = {};
+      if (!grid[name][phase]) grid[name][phase] = {};
+      grid[name][phase][condition] = traceObj;
+    });
+  }));
+  return { grid, sigSets, phases, conditions };
+}
+
+// Re-slice the grid at one condition into the traces[id][phase].all shape that
+// buildSlidingWindowFrames and computeElectrodeHga already consume.
+export function sliceGridForCondition(grid, condition) {
+  if (!grid || condition == null) return {};
+  const out = {};
+  Object.entries(grid).forEach(([name, byPhase]) => {
+    const phaseObj = {};
+    Object.entries(byPhase).forEach(([phase, byCondition]) => {
+      const cell = byCondition[condition];
+      if (cell) phaseObj[phase] = { all: cell };
+    });
+    if (Object.keys(phaseObj).length) out[name] = phaseObj;
+  });
+  return out;
 }
 
 export async function loadViewerBootstrap({ onProgress, dataBase } = {}) {
