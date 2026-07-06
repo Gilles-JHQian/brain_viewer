@@ -12,6 +12,8 @@ import useSelectionPipeline from './hooks/useSelectionPipeline.js';
 import useAnimationPlayback from './hooks/useAnimationPlayback.js';
 import useConditionPhaseGrid from './hooks/useConditionPhaseGrid.js';
 import { sliceGridForCondition } from './data/phaseOverlapStore.js';
+import { computeElectrodeHga } from './utils/electrodeHga.js';
+import { phaseColor } from './constants/colors.js';
 import useOnboardingTour from './hooks/useOnboardingTour.js';
 import PanelTitle from './components/layout/PanelTitle.jsx';
 import VennPanel from './components/venn/VennPanel.jsx';
@@ -185,6 +187,27 @@ export default function App() {
   const conditionTraces = useMemo(
     () => sliceGridForCondition(grid, activeMapCondition),
     [grid, activeMapCondition],
+  );
+
+  // Brain map colors/sizes electrodes by the selected condition's HGA (largest-magnitude
+  // post-onset mean across the panel phases). Override hga_mean_all + hga_size_scale on the
+  // electrodes/metadata passed to BrainViewer only; the Venn/selection keep the originals.
+  const { mapHgaById, mapHgaScale } = useMemo(() => {
+    const { hgaById, scale } = computeElectrodeHga(
+      subjectFilteredElectrodes, conditionTraces, activePanelPhases,
+    );
+    return { mapHgaById: hgaById, mapHgaScale: scale };
+  }, [subjectFilteredElectrodes, conditionTraces, activePanelPhases]);
+
+  const mapElectrodes = useMemo(
+    () => subjectFilteredElectrodes.map(
+      (e) => ({ ...e, hga_mean_all: mapHgaById.get(e.id) ?? null }),
+    ),
+    [subjectFilteredElectrodes, mapHgaById],
+  );
+  const metadataForMap = useMemo(
+    () => (data?.metadata ? { ...data.metadata, hga_size_scale: mapHgaScale } : data?.metadata),
+    [data?.metadata, mapHgaScale],
   );
 
   const kdeRenderRequired = brainViewMode === 'kde';
@@ -374,9 +397,25 @@ export default function App() {
 
         <section className="panel brain-panel">
           <PanelTitle icon={<Brain size={18} />} title="Cortical HGA map" />
+          {gridConditions.length > 1 && (
+            <div className="load-selector brain-condition-picker">
+              <span className="load-selector-label">Map condition</span>
+              {gridConditions.map((condition) => (
+                <button
+                  key={condition}
+                  type="button"
+                  className={activeMapCondition === condition ? 'load-chip active' : 'load-chip'}
+                  onClick={() => setSelectedMapCondition(condition)}
+                >
+                  <span className="waveform-legend-dot" style={{ background: phaseColor(condition) }} />
+                  {condition}
+                </button>
+              ))}
+            </div>
+          )}
           <BrainViewer
-            electrodes={subjectFilteredElectrodes}
-            metadata={data.metadata}
+            electrodes={mapElectrodes}
+            metadata={metadataForMap}
             vennPhases={vennPhases}
             selectedLoad={selectedLoad}
             kdeBandwidth={Number(kdeBandwidth) || KDE_BANDWIDTH}

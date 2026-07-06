@@ -1629,6 +1629,18 @@ h1 {
   flex-wrap: wrap;
 }
 
+.brain-condition-picker {
+  flex-wrap: wrap;
+  padding: 8px 16px 0;
+  flex-shrink: 0;
+}
+
+.brain-condition-picker .load-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .waveform-grid {
   display: grid;
   gap: 8px;
