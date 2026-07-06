@@ -1,7 +1,7 @@
 export function buildAnimationCacheKey(
-  phase, selectedLoad, subjectsKey, electrodeSetKey,
+  phase, condition, selectedLoad, subjectsKey, electrodeSetKey,
   windowSec = '', gateByWindow = true, boundsKey = '',
 ) {
-  return `${phase}|${selectedLoad}|${subjectsKey}|${electrodeSetKey}`
+  return `${phase}|c${condition}|${selectedLoad}|${subjectsKey}|${electrodeSetKey}`
     + `|w${windowSec}|g${gateByWindow ? 1 : 0}|b${boundsKey}`;
 }

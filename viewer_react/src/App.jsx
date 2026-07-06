@@ -10,6 +10,8 @@ import {
 import usePhaseOverlapData from './hooks/usePhaseOverlapData.js';
 import useSelectionPipeline from './hooks/useSelectionPipeline.js';
 import useAnimationPlayback from './hooks/useAnimationPlayback.js';
+import useConditionPhaseGrid from './hooks/useConditionPhaseGrid.js';
+import { sliceGridForCondition } from './data/phaseOverlapStore.js';
 import useOnboardingTour from './hooks/useOnboardingTour.js';
 import PanelTitle from './components/layout/PanelTitle.jsx';
 import VennPanel from './components/venn/VennPanel.jsx';
@@ -121,17 +123,69 @@ export default function App() {
     roiBarItems,
   } = useSelectionPipeline({ subjectFilteredElectrodes, electrodeById, vennMembers });
 
-  // Time-course / animation x-axis bounds per Venn member. Phase axis -> the member's own
-  // phase bounds; condition axis -> all members share the fixed phase's bounds.
-  const memberBounds = useMemo(() => {
-    if (!spec) return null;
-    const out = {};
-    (vennMembers || []).forEach((member) => {
-      const phaseKey = spec.axis === 'condition' ? spec.fixedPhase : member;
-      out[member] = phaseBounds[phaseKey] ?? defaultPhaseBounds(phaseKey);
+  // Full phase x condition grid for the active spec — powers the fixed time-course panel
+  // (all conditions overlaid per phase) and the brain-map condition slice.
+  const {
+    grid,
+    sigSets,
+    gridConditions,
+    gridPhases,
+    gridHasCondition,
+    gridLoading,
+  } = useConditionPhaseGrid({ manifest: data?.manifest, metadata: data?.metadata, spec });
+
+  const gridPhasesKey = gridPhases.join('|');
+  const gridConditionsKey = gridConditions.join('|');
+
+  // Which phases the time-course panel shows (user subset of the spec's phases) and which
+  // condition the brain map colors by. Reconcile to valid values whenever the axes change.
+  const [panelPhases, setPanelPhases] = useState(null);
+  const [selectedMapCondition, setSelectedMapCondition] = useState(null);
+  useEffect(() => {
+    setPanelPhases((prev) => {
+      if (!gridPhases.length) return prev;
+      const kept = (prev || []).filter((phase) => gridPhases.includes(phase));
+      return kept.length ? kept : gridPhases;
     });
-    return out;
-  }, [spec, vennMembers, phaseBounds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gridPhasesKey]);
+  useEffect(() => {
+    setSelectedMapCondition((prev) => (
+      prev && gridConditions.includes(prev) ? prev : (gridConditions[0] ?? null)
+    ));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gridConditionsKey]);
+
+  const activePanelPhases = useMemo(
+    () => ((panelPhases && panelPhases.length) ? panelPhases : gridPhases),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [panelPhases, gridPhasesKey],
+  );
+  const activeMapCondition = selectedMapCondition ?? gridConditions[0] ?? null;
+
+  const togglePanelPhase = useCallback((phase) => {
+    setPanelPhases((prev) => {
+      const current = (prev && prev.length) ? prev : gridPhases;
+      if (current.includes(phase)) {
+        if (current.length <= 1) return current; // keep at least one column
+        return current.filter((item) => item !== phase);
+      }
+      return gridPhases.filter((item) => current.includes(item) || item === phase);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gridPhasesKey]);
+
+  // Per-panel-phase time-course bounds (real-phase-keyed; user overrides, else defaults).
+  const panelPhaseBounds = useMemo(() => Object.fromEntries(
+    activePanelPhases.map((phase) => [phase, phaseBounds[phase] ?? defaultPhaseBounds(phase)]),
+  ), [activePanelPhases, phaseBounds]);
+
+  // Re-slice the grid at the map's condition into the traces[id][phase].all shape the
+  // animation + electrode-HGA code consume.
+  const conditionTraces = useMemo(
+    () => sliceGridForCondition(grid, activeMapCondition),
+    [grid, activeMapCondition],
+  );
 
   const kdeRenderRequired = brainViewMode === 'kde';
 
@@ -141,7 +195,6 @@ export default function App() {
     animationFrameIdx,
     animationCache,
     animationLoadingPhase,
-    animationLoadProgress,
     awaitingKdeRender,
     renderProgress,
     liveHgaByElectrodeId,
@@ -154,7 +207,7 @@ export default function App() {
     layout: data?.layout,
     tableElectrodes,
     tableElectrodesKey,
-    traces: data?.traces,
+    traces: conditionTraces,
     selectedLoad,
     selectedRegionIds,
     vennPhases,
@@ -164,7 +217,9 @@ export default function App() {
     kdeFrameCacheStatus,
     windowSec: Number(windowSec) || ANIM_WINDOW_SEC,
     gateByWindow: sigWindowOnly,
-    memberBounds,
+    memberBounds: panelPhaseBounds,
+    panelPhases: activePanelPhases,
+    selectedMapCondition: activeMapCondition,
     onKdeRenderStart: handleKdeRenderStart,
   });
 
@@ -373,24 +428,28 @@ export default function App() {
       <section className="panel waveform-panel">
         <PanelTitle
           icon={<Activity size={18} />}
-          title={spec?.axis === 'condition' ? 'Per-condition HGA time courses' : 'Per-phase HGA time courses'}
+          title="HGA time courses"
         />
         <WaveformPanel
           electrode={selectedElectrode}
           summary={selectedSummary}
           electrodes={tableElectrodes}
-          traces={data.traces || {}}
+          grid={grid}
+          sigSets={sigSets}
+          conditions={gridConditions}
+          gridLoading={gridLoading}
+          panelPhases={activePanelPhases}
+          availablePhases={gridPhases}
+          phaseLabels={data.metadata?.phase_labels ?? {}}
+          onTogglePanelPhase={togglePanelPhase}
+          overlayIsDiff={spec?.datatype === 'diff'}
+          expandable={spec?.datatype === 'diff' && gridHasCondition}
           variantKey={spec ? JSON.stringify(spec) : 'v'}
           electrodesKey={tableElectrodesKey}
-          memberBounds={memberBounds}
-          layout={data.layout}
-          tracesLoading={tracesLoading}
-          tracesLoadProgress={tracesLoadProgress}
-          initialLoadComplete={initialLoadComplete}
+          memberBounds={panelPhaseBounds}
           selectedLoad={selectedLoad}
           animationCache={animationCache}
           animationLoadingPhase={animationLoadingPhase}
-          animationLoadProgress={animationLoadProgress}
           canPlay={canPlay}
           selectionEmpty={selectionEmpty}
           playingPhase={playingPhase}

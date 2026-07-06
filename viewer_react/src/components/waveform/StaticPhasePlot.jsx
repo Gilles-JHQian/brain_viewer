@@ -28,6 +28,7 @@ function xAxisTickConfig(min, max) {
 
 const StaticPhasePlot = React.memo(function StaticPhasePlot({
   phase,
+  phaseLabel,
   index,
   trace,
   traceKey = 'aggregate',
@@ -51,7 +52,7 @@ const StaticPhasePlot = React.memo(function StaticPhasePlot({
     uirevision: `waveform-static-${traceKey}-${phase}`,
     showlegend: false,
     title: {
-      text: PHASE_LABELS[phase],
+      text: phaseLabel ?? PHASE_LABELS[phase] ?? phase,
       font: { family: PLOT_FONT_FAMILY, size: PLOT_TITLE_SIZE, color: '#0f172a' },
     },
     margin: {
@@ -89,7 +90,7 @@ const StaticPhasePlot = React.memo(function StaticPhasePlot({
       showticklabels: index === 0,
     },
     height: plotHeight,
-  }), [phase, index, traceKey, yRange, min, max, plotHeight, isDiff]);
+  }), [phase, phaseLabel, index, traceKey, yRange, min, max, plotHeight, isDiff]);
 
   useLayoutEffect(() => {
     const node = plotRef.current;

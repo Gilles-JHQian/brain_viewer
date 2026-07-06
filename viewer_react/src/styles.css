@@ -1577,6 +1577,58 @@ h1 {
   white-space: nowrap;
 }
 
+.waveform-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px 6px;
+  flex-shrink: 0;
+}
+
+.waveform-header .waveform-title {
+  padding: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.waveform-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #475569;
+}
+
+.waveform-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.waveform-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.waveform-controls-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 0 16px 8px;
+  flex-shrink: 0;
+}
+
+.waveform-phase-picker,
+.waveform-expand-picker {
+  flex-wrap: wrap;
+}
+
 .waveform-grid {
   display: grid;
   gap: 8px;

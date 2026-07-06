@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PHASES } from '../constants/phases.js';
 import { ANIM_STEP_MS, ANIM_WINDOW_SEC } from '../constants/animation.js';
 import { fetchAndMergePhaseAnimation } from '../utils/mergeAnimationClient.js';
 import { bundleHasPlayableFrames } from '../utils/animationBundle.js';
@@ -21,6 +20,8 @@ export default function useAnimationPlayback({
   windowSec = ANIM_WINDOW_SEC,
   gateByWindow = true,
   memberBounds = null,
+  panelPhases = [],
+  selectedMapCondition = null,
   onKdeRenderStart,
 }) {
   const [playingPhase, setPlayingPhase] = useState(null);
@@ -53,10 +54,11 @@ export default function useAnimationPlayback({
       const b = memberBounds?.[phase];
       const boundsKey = b ? `${b.min},${b.max}` : '';
       return buildAnimationCacheKey(
-        phase, selectedLoad, subjectsKey, tableElectrodesKey, windowSec, gateByWindow, boundsKey,
+        phase, selectedMapCondition ?? '', selectedLoad, subjectsKey, tableElectrodesKey,
+        windowSec, gateByWindow, boundsKey,
       );
     },
-    [selectedLoad, subjectsKey, tableElectrodesKey, windowSec, gateByWindow, memberBounds],
+    [selectedMapCondition, selectedLoad, subjectsKey, tableElectrodesKey, windowSec, gateByWindow, memberBounds],
   );
 
   const getCachedBundle = useCallback((phase) => {
@@ -68,14 +70,16 @@ export default function useAnimationPlayback({
     setCacheVersion((version) => version + 1);
   }, [getCacheKey]);
 
+  const panelPhasesKey = (panelPhases || []).join('|');
   const animationCache = useMemo(() => {
     const byPhase = {};
-    PHASES.forEach((phase) => {
+    (panelPhases || []).forEach((phase) => {
       const bundle = animationCacheRef.current.get(getCacheKey(phase));
       if (bundle) byPhase[phase] = bundle;
     });
     return byPhase;
-  }, [getCacheKey, cacheVersion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getCacheKey, cacheVersion, panelPhasesKey]);
 
   const loadPhaseAnimation = useCallback(async (phase) => {
     const cached = getCachedBundle(phase);
@@ -170,6 +174,8 @@ export default function useAnimationPlayback({
     windowSec,
     gateByWindow,
     memberBounds,
+    panelPhasesKey,
+    selectedMapCondition,
   ]);
 
   useEffect(() => {

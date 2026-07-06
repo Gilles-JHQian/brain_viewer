@@ -7,6 +7,8 @@ import PieProgress from '../ui/PieProgress.jsx';
 
 export default function PhaseAnimationControls({
   phase,
+  phaseLabel,
+  bounds = null,
   bundle,
   canPlay,
   isLoading,
@@ -18,7 +20,10 @@ export default function PhaseAnimationControls({
   onTogglePlay,
   onSeek,
 }) {
-  const { min } = PHASE_TIME_RANGES[phase];
+  // `phase` here is a real phase; the global PHASE_TIME_RANGES may be condition-keyed
+  // (Venn axis), so prefer the explicit `bounds` prop and guard the fallback.
+  const { min } = bounds ?? PHASE_TIME_RANGES[phase] ?? { min: 0 };
+  const label = phaseLabel ?? PHASE_LABELS[phase] ?? phase;
   const hasFrames = bundleHasPlayableFrames(bundle);
   const frameCount = bundle?.frames?.length ?? 0;
   const isActive = playingPhase === phase;
@@ -44,12 +49,12 @@ export default function PhaseAnimationControls({
           disabled={playDisabled}
           onClick={() => onTogglePlay(phase)}
           aria-label={isLoading
-            ? `Loading ${PHASE_LABELS[phase]} animation`
+            ? `Loading ${label} animation`
             : isActive && isPreparing
-              ? `Cancel ${PHASE_LABELS[phase]} map preparation`
+              ? `Cancel ${label} map preparation`
               : isActive && isPlaying
-                ? `Pause ${PHASE_LABELS[phase]} animation`
-                : `Play ${PHASE_LABELS[phase]} animation`}
+                ? `Pause ${label} animation`
+                : `Play ${label} animation`}
         >
           {isLoading
             ? <Loader2 size={14} className="spin-icon" />
@@ -87,7 +92,7 @@ export default function PhaseAnimationControls({
         value={activeFrameIdx}
         disabled={!hasFrames || isLoading || (isActive && isPreparing)}
         onChange={(event) => onSeek(phase, Number(event.target.value))}
-        aria-label={`${PHASE_LABELS[phase]} animation time scrubber`}
+        aria-label={`${label} animation time scrubber`}
         aria-valuetext={`${currentTime.toFixed(2)} seconds`}
       />
     </div>

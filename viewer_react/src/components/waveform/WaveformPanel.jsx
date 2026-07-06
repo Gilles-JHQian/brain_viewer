@@ -1,22 +1,22 @@
-import React, { useMemo } from 'react';
-import { PHASES, PHASE_LABELS, PHASE_WIDTH_RATIOS } from '../../constants/phases.js';
+import React, { useMemo, useState } from 'react';
 import {
-  resolvePanelPhaseTrace,
+  resolvePanelConditionSeries,
   clipTraceToPhaseWindow,
   computeTraceYRange,
 } from '../../utils/traces.js';
+import { phaseColor } from '../../constants/colors.js';
 import { resolveWaveformYRange } from '../../constants/waveform.js';
 import { formatWaveformTitle } from '../../utils/selectionSummary.js';
 import PhaseAnimationControls from './PhaseAnimationControls.jsx';
 import PhaseWaveformPlot from './PhaseWaveformPlot.jsx';
 import PanelEmptyState from '../layout/PanelEmptyState.jsx';
-import TraceLoadProgress from '../ui/TraceLoadProgress.jsx';
 
 // The bottom trace shows a little context beyond the (animation) bounds front and back.
 const TRACE_BOUNDS_MARGIN_SEC = 0.1;
 
 const StaticWaveformBody = React.memo(function StaticWaveformBody({
   phase,
+  phaseLabel,
   index,
   trace,
   traceKey,
@@ -33,7 +33,7 @@ const StaticWaveformBody = React.memo(function StaticWaveformBody({
       <div className="plot-empty">
         {selectionEmpty
           ? selectionEmpty.message
-          : `No HGA trace for ${PHASE_LABELS[phase]} in this selection`}
+          : `No HGA trace for ${phaseLabel} in this selection`}
       </div>
     );
   }
@@ -42,6 +42,7 @@ const StaticWaveformBody = React.memo(function StaticWaveformBody({
     <PhaseWaveformPlot
       key={`${traceKey}-${phase}`}
       phase={phase}
+      phaseLabel={phaseLabel}
       index={index}
       trace={trace}
       traceKey={traceKey}
@@ -69,6 +70,8 @@ const StaticWaveformBody = React.memo(function StaticWaveformBody({
 
 const PhasePlotCard = React.memo(function PhasePlotCard({
   phase,
+  phaseLabel,
+  bounds,
   index,
   staticTrace,
   traceKey,
@@ -76,7 +79,6 @@ const PhasePlotCard = React.memo(function PhasePlotCard({
   isSingleElectrode,
   canPlay,
   animationLoadingPhase,
-  animationLoadProgress,
   playingPhase,
   isPlaying,
   awaitingKdeRender,
@@ -87,16 +89,16 @@ const PhasePlotCard = React.memo(function PhasePlotCard({
   onSeek,
 }) {
   const isActivePhase = playback.isActivePhase;
-  const isLoadingAnimation = animationLoadingPhase === phase;
-  const showAnimationLoadOverlay = isLoadingAnimation && animationLoadProgress.phase === phase;
 
   return (
-    <div className={`plot-card${isActivePhase ? ' playing' : ''}${showAnimationLoadOverlay ? ' loading-animation' : ''}`}>
+    <div className={`plot-card${isActivePhase ? ' playing' : ''}`}>
       <PhaseAnimationControls
         phase={phase}
+        phaseLabel={phaseLabel}
+        bounds={bounds}
         bundle={playback.controlsBundle}
         canPlay={canPlay}
-        isLoading={isLoadingAnimation}
+        isLoading={animationLoadingPhase === phase}
         isPreparing={isActivePhase && awaitingKdeRender}
         renderProgress={renderProgress}
         playingPhase={playingPhase}
@@ -105,20 +107,9 @@ const PhasePlotCard = React.memo(function PhasePlotCard({
         onTogglePlay={onTogglePlay}
         onSeek={onSeek}
       />
-      {showAnimationLoadOverlay && (
-        <div className="plot-animation-loading">
-          <TraceLoadProgress
-            compact
-            title="Loading animation"
-            progress={animationLoadProgress.progress}
-            completed={animationLoadProgress.completed}
-            total={animationLoadProgress.total}
-            subjectLabel="subjects"
-          />
-        </div>
-      )}
       <StaticWaveformBody
         phase={phase}
+        phaseLabel={phaseLabel}
         index={index}
         trace={staticTrace.trace}
         traceKey={traceKey}
@@ -134,6 +125,7 @@ const PhasePlotCard = React.memo(function PhasePlotCard({
   );
 }, (prev, next) => (
   prev.phase === next.phase
+  && prev.phaseLabel === next.phaseLabel
   && prev.index === next.index
   && prev.traceKey === next.traceKey
   && prev.isSingleElectrode === next.isSingleElectrode
@@ -147,25 +139,29 @@ const PhasePlotCard = React.memo(function PhasePlotCard({
   && prev.selectionEmpty === next.selectionEmpty
   && prev.staticTrace === next.staticTrace
   && prev.playback === next.playback
-  && prev.animationLoadProgress === next.animationLoadProgress
+  && prev.bounds === next.bounds
 ));
 
 function WaveformPanel({
   electrode,
   summary,
   electrodes,
-  traces,
+  grid = null,
+  sigSets = null,
+  conditions = [],
+  gridLoading = false,
+  panelPhases = [],
+  availablePhases = [],
+  phaseLabels = {},
+  onTogglePanelPhase,
+  gate = true,
+  overlayIsDiff = false,
+  expandable = false,
   variantKey = null,
   electrodesKey = '',
   memberBounds = null,
   selectedLoad,
-  layout = 'split',
-  tracesLoading = false,
-  tracesLoadProgress = { completed: 0, total: 0, progress: 0 },
-  initialLoadComplete = true,
   animationCache,
-  animationLoadingPhase,
-  animationLoadProgress = { completed: 0, total: 0, progress: 0, phase: null },
   canPlay,
   selectionEmpty = null,
   playingPhase,
@@ -173,14 +169,17 @@ function WaveformPanel({
   awaitingKdeRender = false,
   renderProgress = 0,
   animationFrameIdx,
+  animationLoadingPhase,
   onTogglePlay,
   onSeek,
 }) {
-  const loadLabel = selectedLoad === 'all' ? 'all loads averaged' : `load ${selectedLoad}`;
+  const loadLabel = selectedLoad === 'all' ? 'all conditions' : `load ${selectedLoad}`;
   const isSingleElectrode = Boolean(electrode);
-  // Include variantKey + the selected electrode set so the memoized plots re-render when the
-  // variant switches OR the Venn/ROI selection changes (even while in 'aggregate' mode).
-  const traceKey = `${variantKey ?? 'v'}:${electrode?.id ?? `agg:${electrodesKey}`}`;
+  // Single-electrode diff mode can expand one condition into active/baseline/difference.
+  const [expandCondition, setExpandCondition] = useState(null);
+  const canExpand = isSingleElectrode && expandable;
+  const activeExpand = (canExpand && conditions.includes(expandCondition)) ? expandCondition : null;
+
   const { title, fullTitle } = formatWaveformTitle({
     summary,
     isSingleElectrode,
@@ -189,40 +188,60 @@ function WaveformPanel({
     electrodeCount: electrodes.length,
   });
 
-  const allowMock = layout === 'mock';
-  const awaitingTraces = layout === 'split' && tracesLoading && initialLoadComplete;
+  // Include variantKey + selection + expand mode so the memoized plots re-render on change.
+  const traceKey = `${variantKey ?? 'v'}:${electrode?.id ?? `agg:${electrodesKey}`}:${activeExpand ?? 'overlay'}`;
 
   const staticTraces = useMemo(() => {
-    const built = PHASES.map((phase, index) => {
-      const resolved = awaitingTraces
-        ? null
-        : resolvePanelPhaseTrace(traces, electrodes, phase, selectedLoad, electrode, allowMock);
-      const rawTrace = resolved
-        ? {
-          x: resolved.time,
-          y: resolved.value,
-          sem: resolved.sem ?? null,
-          act: resolved.act ?? null,
-          bsl: resolved.bsl ?? null,
-          actLabel: resolved.actLabel,
-          bslLabel: resolved.bslLabel,
-        }
-        : { x: [], y: [], sem: null };
+    const built = panelPhases.map((phase, index) => {
       const bounds = memberBounds?.[phase] ?? null;
-      // Trace display window = animation bounds padded with a small margin front/back.
       const display = bounds
         ? { min: bounds.min - TRACE_BOUNDS_MARGIN_SEC, max: bounds.max + TRACE_BOUNDS_MARGIN_SEC }
         : null;
+      let rawTrace;
+      if (!grid) {
+        rawTrace = { conditions: [] };
+      } else if (activeExpand) {
+        const series = resolvePanelConditionSeries(
+          grid, sigSets, electrodes, phase, activeExpand, electrode, { gate },
+        );
+        rawTrace = series
+          ? {
+            x: series.time,
+            y: series.value,
+            sem: series.sem,
+            act: series.act,
+            bsl: series.bsl,
+            actLabel: series.actLabel,
+            bslLabel: series.bslLabel,
+          }
+          : { x: [], y: [], sem: null };
+      } else {
+        rawTrace = {
+          conditions: conditions.map((condition) => {
+            const series = resolvePanelConditionSeries(
+              grid, sigSets, electrodes, phase, condition, electrode, { gate },
+            );
+            return {
+              condition,
+              x: series?.time ?? [],
+              y: series?.value ?? [],
+              sem: series?.sem ?? null,
+            };
+          }),
+        };
+      }
       const trace = clipTraceToPhaseWindow(rawTrace, phase, display);
-      return { phase, index, trace, hasTrace: trace.x.length > 0, xRange: display };
+      const hasTrace = trace.conditions
+        ? trace.conditions.some((c) => c.x.length > 0)
+        : trace.x.length > 0;
+      return { phase, index, trace, hasTrace, xRange: display };
     });
 
-    // Auto-scale the shared y-axis to the data across all members (diff plots autorange
-    // themselves in StaticPhasePlot, so this mainly drives zscore mode).
+    // Shared y-axis auto-scaled across all columns / conditions.
     let ymin = Infinity;
     let ymax = -Infinity;
-    built.forEach(({ trace }) => {
-      if (!trace.x.length) return;
+    built.forEach(({ trace, hasTrace }) => {
+      if (!hasTrace) return;
       const [lo, hi] = computeTraceYRange(trace);
       ymin = Math.min(ymin, lo);
       ymax = Math.max(ymax, hi);
@@ -230,18 +249,10 @@ function WaveformPanel({
     const yRange = Number.isFinite(ymin) && ymax > ymin ? [ymin, ymax] : resolveWaveformYRange();
 
     return Object.fromEntries(built.map((entry) => [entry.phase, { ...entry, yRange }]));
-  }, [
-    traces,
-    electrodes,
-    selectedLoad,
-    electrode,
-    allowMock,
-    awaitingTraces,
-    memberBounds,
-  ]);
+  }, [grid, sigSets, electrodes, electrode, panelPhases, conditions, memberBounds, activeExpand, gate]);
 
   const playbackByPhase = useMemo(() => (
-    Object.fromEntries(PHASES.map((phase) => {
+    Object.fromEntries(panelPhases.map((phase) => {
       const phaseBundle = animationCache?.[phase];
       const isActivePhase = playingPhase === phase;
       return [phase, {
@@ -252,36 +263,84 @@ function WaveformPanel({
         controlsBundle: phaseBundle,
       }];
     }))
-  ), [animationCache, playingPhase, animationFrameIdx]);
+  ), [animationCache, playingPhase, animationFrameIdx, panelPhases]);
+
+  const showLoading = gridLoading && !grid;
 
   return (
     <div className="waveform-body">
       <div className="waveform-header">
         <div className="waveform-title" title={fullTitle}>{title}</div>
+        {conditions.length > 1 && !activeExpand && (
+          <div className="waveform-legend">
+            {conditions.map((condition) => (
+              <span key={condition} className="waveform-legend-item">
+                <span className="waveform-legend-dot" style={{ background: phaseColor(condition) }} />
+                {condition}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="waveform-controls-row">
+        {availablePhases.length > 1 && (
+          <div className="load-selector waveform-phase-picker">
+            <span className="load-selector-label">Phases</span>
+            {availablePhases.map((phase) => (
+              <button
+                key={phase}
+                type="button"
+                className={panelPhases.includes(phase) ? 'load-chip active' : 'load-chip'}
+                onClick={() => onTogglePanelPhase?.(phase)}
+              >
+                {phaseLabels[phase] ?? phase}
+              </button>
+            ))}
+          </div>
+        )}
+        {canExpand && (
+          <div className="load-selector waveform-expand-picker">
+            <span className="load-selector-label">Show</span>
+            <button
+              type="button"
+              className={!activeExpand ? 'load-chip active' : 'load-chip'}
+              onClick={() => setExpandCondition(null)}
+              title="Overlay all conditions (difference)"
+            >
+              Conditions
+            </button>
+            {conditions.map((condition) => (
+              <button
+                key={condition}
+                type="button"
+                className={activeExpand === condition ? 'load-chip active' : 'load-chip'}
+                onClick={() => setExpandCondition(condition)}
+                title={`${condition}: active / baseline / difference`}
+              >
+                {condition}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="waveform-grid-wrap" data-tour="waveform-panel">
-        {awaitingTraces && (
+        {showLoading && (
           <div className="waveform-loading">
             <div className="waveform-loading-card">
-              <TraceLoadProgress
-                progress={tracesLoadProgress.progress}
-                completed={tracesLoadProgress.completed}
-                total={tracesLoadProgress.total}
-              />
-              <p className="waveform-loading-note">
-                Waveforms will appear once subject traces finish loading.
-              </p>
+              <p className="waveform-loading-note">Loading time courses…</p>
             </div>
           </div>
         )}
         <div
-          className={`waveform-grid${selectionEmpty ? ' is-empty' : ''}${awaitingTraces ? ' is-loading' : ''}`}
-          style={{ gridTemplateColumns: PHASES.map((phase) => `${PHASE_WIDTH_RATIOS[phase]}fr`).join(' ') }}
+          className={`waveform-grid${selectionEmpty ? ' is-empty' : ''}`}
+          style={{ gridTemplateColumns: panelPhases.map(() => '1fr').join(' ') }}
         >
-          {PHASES.map((phase) => (
+          {panelPhases.map((phase) => (
             <PhasePlotCard
               key={phase}
               phase={phase}
+              phaseLabel={phaseLabels[phase] ?? phase}
+              bounds={memberBounds?.[phase] ?? null}
               index={staticTraces[phase].index}
               staticTrace={staticTraces[phase]}
               traceKey={traceKey}
@@ -289,7 +348,6 @@ function WaveformPanel({
               isSingleElectrode={isSingleElectrode}
               canPlay={canPlay}
               animationLoadingPhase={animationLoadingPhase}
-              animationLoadProgress={animationLoadProgress}
               playingPhase={playingPhase}
               isPlaying={isPlaying}
               awaitingKdeRender={awaitingKdeRender}

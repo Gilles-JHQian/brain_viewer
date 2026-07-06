@@ -10,8 +10,10 @@ export default function useConditionPhaseGrid({ manifest, metadata, spec }) {
   const [sigSets, setSigSets] = useState(null);
   const [gridLoading, setGridLoading] = useState(false);
 
-  const { phases, conditions } = useMemo(
-    () => (metadata && spec ? gridAxesForSpec(metadata, spec) : { phases: [], conditions: [] }),
+  const { phases, conditions, hasCondition } = useMemo(
+    () => (metadata && spec
+      ? gridAxesForSpec(metadata, spec)
+      : { phases: [], conditions: [], hasCondition: false }),
     [metadata, spec],
   );
   const phasesKey = phases.join('|');
@@ -45,5 +47,12 @@ export default function useConditionPhaseGrid({ manifest, metadata, spec }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manifest, spec, phasesKey, conditionsKey]);
 
-  return { grid, sigSets, gridConditions: conditions, gridPhases: phases, gridLoading };
+  return {
+    grid,
+    sigSets,
+    gridConditions: conditions,
+    gridPhases: phases,
+    gridHasCondition: hasCondition,
+    gridLoading,
+  };
 }

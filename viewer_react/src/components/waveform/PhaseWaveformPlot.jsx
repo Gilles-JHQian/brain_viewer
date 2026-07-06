@@ -5,6 +5,7 @@ import PlaybackVLineOverlay from './PlaybackVLineOverlay.jsx';
 
 function PhaseWaveformPlot({
   phase,
+  phaseLabel,
   index,
   trace,
   traceKey,
@@ -49,6 +50,7 @@ function PhaseWaveformPlot({
     >
       <StaticPhasePlot
         phase={phase}
+        phaseLabel={phaseLabel}
         index={index}
         trace={trace}
         traceKey={traceKey}

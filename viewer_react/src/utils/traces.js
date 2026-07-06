@@ -106,23 +106,20 @@ export function electrodesActiveInPhase(electrodes, phase) {
   return (electrodes || []).filter((electrode) => electrode.phase_flags?.[phase]);
 }
 
-export function averageElectrodePhaseTraces(traces, electrodes, phase, selectedLoad, allowMock = false) {
-  const activeElectrodes = electrodesActiveInPhase(electrodes, phase);
-  const electrodeTraces = activeElectrodes
-    .map((electrode) => resolvePhaseTrace(traces, electrode, phase, selectedLoad, allowMock))
-    .filter((trace) => trace?.time?.length);
-  if (electrodeTraces.length === 0) return null;
-  if (electrodeTraces.length === 1) {
-    return { time: electrodeTraces[0].time, value: electrodeTraces[0].value, sem: null };
+// Average a list of {time, value} traces onto their union time grid, with SEM across traces.
+export function averageTraceList(traceList) {
+  const traces = (traceList || []).filter((trace) => trace?.time?.length);
+  if (traces.length === 0) return null;
+  if (traces.length === 1) {
+    return { time: traces[0].time, value: traces[0].value, sem: null };
   }
-
   const timeSet = new Set();
-  electrodeTraces.forEach((trace) => trace.time.forEach((time) => timeSet.add(time)));
+  traces.forEach((trace) => trace.time.forEach((time) => timeSet.add(time)));
   const times = Array.from(timeSet).sort((a, b) => a - b);
   const values = [];
   const sems = [];
   times.forEach((time) => {
-    const samples = electrodeTraces
+    const samples = traces
       .map((trace) => interpolateTraceValue(trace, time))
       .filter((value) => value != null);
     const stats = meanAndSem(samples);
@@ -132,11 +129,45 @@ export function averageElectrodePhaseTraces(traces, electrodes, phase, selectedL
   return { time: times, value: values, sem: sems };
 }
 
+export function averageElectrodePhaseTraces(traces, electrodes, phase, selectedLoad, allowMock = false) {
+  const activeElectrodes = electrodesActiveInPhase(electrodes, phase);
+  const electrodeTraces = activeElectrodes
+    .map((electrode) => resolvePhaseTrace(traces, electrode, phase, selectedLoad, allowMock));
+  return averageTraceList(electrodeTraces);
+}
+
 export function resolvePanelPhaseTrace(traces, electrodes, phase, selectedLoad, electrode, allowMock = false) {
   if (electrode) {
     return resolvePhaseTrace(traces, electrode, phase, selectedLoad, allowMock);
   }
   return averageElectrodePhaseTraces(traces, electrodes, phase, selectedLoad, allowMock);
+}
+
+// One condition's series for a phase column, from the phase x condition grid.
+// Single electrode -> that cell; aggregate -> average the selected electrodes that have a
+// cell (optionally gated to those significant in this (phase, condition) via sigSets).
+export function resolvePanelConditionSeries(
+  grid, sigSets, electrodes, phase, condition, electrode, { gate = true } = {},
+) {
+  if (!grid) return null;
+  if (electrode) {
+    const cell = grid[electrode.id]?.[phase]?.[condition];
+    if (!cell) return null;
+    return {
+      time: cell.time,
+      value: cell.value,
+      sem: cell.sem ?? null,
+      act: cell.act ?? null,
+      bsl: cell.bsl ?? null,
+      actLabel: cell.actLabel,
+      bslLabel: cell.bslLabel,
+    };
+  }
+  const sig = gate ? sigSets?.[phase]?.[condition] : null;
+  const cells = (electrodes || [])
+    .filter((e) => grid[e.id]?.[phase]?.[condition] && (!sig || sig.has(e.id)))
+    .map((e) => grid[e.id][phase][condition]);
+  return averageTraceList(cells);
 }
 
 function clipSeries(series, indices) {
@@ -154,10 +185,10 @@ function clipSeries(series, indices) {
   return out;
 }
 
-export function clipTraceToPhaseWindow(trace, phase, bounds = null) {
-  if (!trace?.x?.length) return { x: [], y: [], upper: [], lower: [], sem: [] };
-  const { min, max } = bounds ?? PHASE_TIME_RANGES[phase] ?? { min: -Infinity, max: Infinity };
+// Clip one {x, y, sem, [act], [bsl]} series to [min, max] into the plot-ready shape.
+function clipXYSeries(trace, min, max) {
   const clipped = { x: [], y: [], upper: [], lower: [], sem: [] };
+  if (!trace?.x?.length) return clipped;
   const keptIndices = [];
   trace.x.forEach((time, index) => {
     if (time >= min && time <= max) {
@@ -182,8 +213,21 @@ export function clipTraceToPhaseWindow(trace, phase, bounds = null) {
   return clipped;
 }
 
+export function clipTraceToPhaseWindow(trace, phase, bounds = null) {
+  const { min, max } = bounds ?? PHASE_TIME_RANGES[phase] ?? { min: -Infinity, max: Infinity };
+  // Condition-overlay column: clip each per-condition series independently.
+  if (trace?.conditions?.length) {
+    return {
+      conditions: trace.conditions.map((c) => ({
+        condition: c.condition,
+        ...clipXYSeries(c, min, max),
+      })),
+    };
+  }
+  return clipXYSeries(trace, min, max);
+}
+
 export function computeTraceYRange(trace) {
-  if (!trace?.y?.length) return [-0.5, 1.5];
   let ymin = Infinity;
   let ymax = -Infinity;
   const consider = (value) => {
@@ -192,9 +236,16 @@ export function computeTraceYRange(trace) {
       ymax = Math.max(ymax, value);
     }
   };
-  trace.y.forEach(consider);
-  trace.upper?.forEach(consider);
-  trace.lower?.forEach(consider);
+  const considerSeries = (series) => {
+    series?.y?.forEach(consider);
+    series?.upper?.forEach(consider);
+    series?.lower?.forEach(consider);
+  };
+  if (trace?.conditions?.length) {
+    trace.conditions.forEach(considerSeries);
+  } else {
+    considerSeries(trace);
+  }
   if (!Number.isFinite(ymin)) return [-0.5, 1.5];
   const span = ymax - ymin;
   const pad = Math.max(span * 0.08, 0.08);
@@ -239,7 +290,29 @@ function buildDiffPlotData(trace) {
   return out;
 }
 
+// One line per condition (colored by condition) for a phase column — the fixed
+// phase x condition layout of the time-course panel.
+function buildConditionOverlayPlotData(trace) {
+  const out = [];
+  trace.conditions.forEach((c) => {
+    if (!c.x?.length) return;
+    const color = phaseColor(c.condition);
+    out.push({
+      x: c.x,
+      y: c.y,
+      type: 'scatter',
+      mode: 'lines',
+      line: { color, width: 2 },
+      name: c.condition,
+      hovertemplate: `${c.condition}: t=%{x:.2f}s, %{y:.2f}<extra></extra>`,
+      showlegend: false,
+    });
+  });
+  return out;
+}
+
 export function buildWaveformPlotData(trace, phase, isAggregate) {
+  if (trace.conditions?.length) return buildConditionOverlayPlotData(trace);
   if (trace.act?.y?.length) return buildDiffPlotData(trace);
   const color = phaseColor(phase);
   const traces = [];
