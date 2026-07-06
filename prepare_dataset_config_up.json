@@ -13,7 +13,18 @@
     "references": ["car"],
     "phases": ["Cue", "Stimulus", "UP", "Delay", "Response"],
     "conditions": ["Decision", "Passive", "Repeat"],
-    "diff_types": {}
+    "diff_types": {
+      "lexicality": {
+        "directions": ["NwWd", "WdNw"],
+        "needs_condition": true,
+        "stim_type_map": {
+          "NwWd": ["Nonword", "Word"],
+          "WdNw": ["Word", "Nonword"]
+        },
+        "stats_rec_type": "stimType",
+        "phases": ["Stimulus", "UP", "Delay", "Response"]
+      }
+    }
   },
   "mesh_decimate_target": 50000
 }

@@ -889,18 +889,24 @@ def _build_sig_mask(all_ch_names: List[str], n_times: int,
         h5_ch_names, h5_mask, stat_times = result
         h5_ch_to_idx = {name: idx for idx, name in enumerate(h5_ch_names)}
 
-        # Align this file's mask onto the full epoch time axis.
+        # Align this file's mask onto the full epoch time axis:
+        #  - if the file stores its own time axis, align precisely by it;
+        #  - else a full-length mask (mask_len == n_times) is already epoch-aligned
+        #    (offset 0) — this covers the diff statistics, which store a full mask
+        #    but no time axis;
+        #  - else (a genuinely cropped mask with no time axis) fall back to the
+        #    legacy per-phase window.
+        mask_len = h5_mask.shape[1]
         offset = 0
         if times is not None and stat_times is not None and len(stat_times):
             offset = int(np.searchsorted(times, float(stat_times[0])))
-        elif times is not None and phase in stat_windows:
+        elif times is not None and mask_len < n_times and phase in stat_windows:
             offset = int(np.searchsorted(times, stat_windows[phase][0]))
         offset = max(0, offset)
 
         for ch_name, global_idx in ch_list:
             if ch_name in h5_ch_to_idx:
                 h5_idx = h5_ch_to_idx[ch_name]
-                mask_len = h5_mask.shape[1]
                 end = min(offset + mask_len, n_times)
                 n_copy = end - offset
                 combined_mask[global_idx, offset:end] = h5_mask[h5_idx, :n_copy]
@@ -1052,8 +1058,11 @@ def _prepare_condition_diff(subjects: List[str], config: dict, type_dir: str):
     """
     Condition diff: compute from zscore epochs of two conditions.
     No condition dimension — just phase × direction.
+
+    A ``phases`` key in the diff-type config restricts the exported phases
+    (defaults to all configured PHASES).
     """
-    for phase in PHASES:
+    for phase in config.get("phases", PHASES):
         for direction in config["directions"]:
             act_cond, bsl_cond = config["condition_map"][direction]
             print(f"    {phase}/{direction} ({act_cond} vs {bsl_cond})")
@@ -1161,8 +1170,12 @@ def _prepare_lexicality_diff(subjects: List[str], config: dict, type_dir: str):
     """
     Lexicality diff: split zscore trials by stim_type (Word/Nonword),
     compute group means and difference. Has condition dimension.
+
+    A ``phases`` key in the diff-type config restricts which phases are exported
+    (e.g. lexicality is undefined pre-stimulus, so UP omits Cue). Defaults to all
+    configured PHASES.
     """
-    for phase in PHASES:
+    for phase in config.get("phases", PHASES):
         for condition in CONDITIONS:
             for direction in config["directions"]:
                 act_stim, bsl_stim = config["stim_type_map"][direction]
@@ -1283,7 +1296,9 @@ def _prepare_neighborhood_diff(subjects: List[str], config: dict,
         print("    Warning: No neighborhood info in stim_properties.json, skipping")
         return
 
-    for phase in PHASES:
+    # A ``phases`` key in the diff-type config restricts the exported phases
+    # (defaults to all configured PHASES).
+    for phase in config.get("phases", PHASES):
         for condition in CONDITIONS:
             for direction in config["directions"]:
                 act_group, bsl_group = config["neighborhood_map"][direction]
