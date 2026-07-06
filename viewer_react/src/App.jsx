@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Activity, Brain, Info } from 'lucide-react';
+import { Activity, Brain, Info, FlaskConical } from 'lucide-react';
 import { PHASES, defaultPhaseBounds } from './constants/phases.js';
 import { VENN_MAX_PHASES, VENN_MIN_PHASES } from './constants/venn.js';
 import { DEFAULT_BRAIN_VIEW_MODE } from './constants/brain.js';
@@ -51,6 +51,9 @@ export default function App() {
   }, []);
 
   const {
+    task,
+    setTask,
+    tasks,
     data,
     isInitialLoading,
     initialLoadProgress,
@@ -210,6 +213,19 @@ export default function App() {
       <header className="topbar">
         <h1 className="topbar-title"><Brain size={20} /> HGA viewer</h1>
         <div className="topbar-controls">
+          <div className="load-selector task-selector" data-tour="task-selector">
+            <span className="load-selector-label"><FlaskConical size={14} /> Task</span>
+            {tasks.map((taskOption) => (
+              <button
+                key={taskOption.id}
+                type="button"
+                className={task === taskOption.id ? 'load-chip active' : 'load-chip'}
+                onClick={() => setTask(taskOption.id)}
+              >
+                {taskOption.label}
+              </button>
+            ))}
+          </div>
           <SettingsPanel
             windowSec={windowSec}
             onWindowSec={setWindowSec}

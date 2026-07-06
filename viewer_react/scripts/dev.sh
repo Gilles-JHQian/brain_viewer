@@ -75,6 +75,21 @@ for ref in car bipolar; do
   fi
 done
 
+# --- Uniqueness Point task (2nd entry in the top-bar task switcher; see
+#     src/constants/tasks.js dataBase='/data_up'). Served from its own bundle,
+#     which already carries its manifest (built by build_viewer_assets.py).
+#     The fsaverage brain GLB in public/assets is shared, so it is not re-linked. ---
+UP_DATA_DIR="${BRAIN_VIEWER_DATA_UP:-$LEX_DIR/brain_viewer_data_up}"
+if [ -d "$UP_DATA_DIR" ]; then
+  mkdir -p public/data_up
+  [ -f "$UP_DATA_DIR/manifest.json" ] && ln -sfn "$UP_DATA_DIR/manifest.json" public/data_up/manifest.json
+  for ref in car bipolar; do
+    if [ -d "$UP_DATA_DIR/$ref" ]; then
+      ln -sfn "$UP_DATA_DIR/$ref" "public/data_up/$ref"
+    fi
+  done
+fi
+
 # --- tunnel hint ---
 HOST="$(hostname -f 2>/dev/null || hostname)"
 cat <<EOF

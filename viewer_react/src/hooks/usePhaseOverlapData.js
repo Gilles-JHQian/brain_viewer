@@ -7,6 +7,7 @@ import {
   defaultVariantSpec,
 } from '../data/phaseOverlapStore.js';
 import { applyVennAxisConfig, vennAxisConfig } from '../constants/phaseConfig.js';
+import { TASKS, DEFAULT_TASK_ID, taskById } from '../constants/tasks.js';
 
 const BOOTSTRAP_LOAD_WEIGHT = 0.15;
 const TRACES_LOAD_WEIGHT = 0.85;
@@ -18,6 +19,9 @@ const STAGE_LABELS = {
 };
 
 export default function usePhaseOverlapData() {
+  // Which dataset ("task") is loaded. Switching it re-points the store's data base
+  // and reloads the whole bootstrap (manifest + electrodes + default variant).
+  const [task, setTask] = useState(DEFAULT_TASK_ID);
   const [bootstrap, setBootstrap] = useState(null);
   const [bootstrapLoading, setBootstrapLoading] = useState(true);
   const [bootstrapProgress, setBootstrapProgress] = useState({
@@ -45,11 +49,20 @@ export default function usePhaseOverlapData() {
 
   useEffect(() => {
     let cancelled = false;
+    // Reset all per-task state so the new task loads fresh (and the initial-load
+    // screen is shown again during the switch) rather than mixing datasets.
+    setBootstrap(null);
+    setSpec(null);
+    setVariantData(null);
+    setTraces({});
+    setTracesLoadStarted(false);
+    setInitialLoadComplete(false);
     setBootstrapLoading(true);
     setLoadError(null);
     setBootstrapProgress({ stage: 'manifest', completed: 0, total: 2 });
 
     loadViewerBootstrap({
+      dataBase: taskById(task).dataBase,
       onProgress: (status) => {
         if (!cancelled) setBootstrapProgress(status);
       },
@@ -68,7 +81,7 @@ export default function usePhaseOverlapData() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [task]);
 
   const metadata = bootstrap?.metadata ?? null;
   const regions = bootstrap?.regions ?? [];
@@ -349,6 +362,10 @@ export default function usePhaseOverlapData() {
   );
 
   return {
+    // task switching
+    task,
+    setTask,
+    tasks: TASKS,
     data,
     isInitialLoading,
     initialLoadComplete,

@@ -35,6 +35,11 @@ class LruCache {
 const traceCache = new LruCache(TRACE_CACHE_MAX);
 const animationCache = new LruCache(TRACE_CACHE_MAX * 4);
 
+// Base URL under which the active task's data files live (manifest + per-reference
+// zscore/electrode JSON). Switched per task via setDataBase(); every fetch below is
+// resolved against it, so a task switch just re-points the whole data tree.
+let DATA_BASE = '/data';
+
 async function fetchJson(path) {
   const response = await fetch(path);
   if (!response.ok) {
@@ -69,11 +74,22 @@ function adaptElectrode(raw) {
 
 const variantElectrodeCache = new LruCache(4); // per reference
 
+// Point the store at a task's data bundle. The caches above key by reference/subject,
+// which collide across tasks, so clear them whenever the base actually changes.
+export function setDataBase(base) {
+  const next = base || '/data';
+  if (next === DATA_BASE) return;
+  DATA_BASE = next;
+  variantElectrodeCache.map.clear();
+  traceCache.map.clear();
+  animationCache.map.clear();
+}
+
 async function loadReferenceElectrodes(manifest, reference) {
   if (variantElectrodeCache.has(reference)) return variantElectrodeCache.get(reference);
   const path = manifest?.files?.electrodes?.[reference];
   if (!path) return [];
-  const payload = await fetchJson(`/data/${path}`);
+  const payload = await fetchJson(`${DATA_BASE}/${path}`);
   const electrodes = (payload.electrodes || []).map(adaptElectrode);
   variantElectrodeCache.set(reference, electrodes);
   return electrodes;
@@ -102,7 +118,7 @@ async function loadMemberPayloads(spec, members, diffMeta) {
   await Promise.all(members.map(async (member) => {
     const path = resolveVariantFile(spec, member, diffMeta);
     try {
-      const payload = await fetchJson(`/data/${path}`);
+      const payload = await fetchJson(`${DATA_BASE}/${path}`);
       payloads[member] = payload;
       sigByMember[member] = new Set(payload.sig_channels || []);
     } catch {
@@ -203,14 +219,15 @@ export async function loadVariant(manifest, spec) {
   return { spec, members, reference: spec.reference, electrodes, traces, hgaScale };
 }
 
-export async function loadViewerBootstrap({ onProgress } = {}) {
+export async function loadViewerBootstrap({ onProgress, dataBase } = {}) {
+  setDataBase(dataBase);
   const reportBootstrap = (stage, completed, total = 2) => {
     onProgress?.({ stage, completed, total });
   };
 
   try {
     reportBootstrap('manifest', 0);
-    const manifest = await fetchJson('/data/manifest.json');
+    const manifest = await fetchJson(`${DATA_BASE}/manifest.json`);
     reportBootstrap('manifest', 1);
 
     // brain_viewer variant layout: derive member flags + traces for the default spec.
@@ -232,7 +249,7 @@ export async function loadViewerBootstrap({ onProgress } = {}) {
       };
     }
 
-    const electrodesPayload = await fetchJson(`/data/${manifest.files.electrodes}`);
+    const electrodesPayload = await fetchJson(`${DATA_BASE}/${manifest.files.electrodes}`);
     reportBootstrap('electrodes', 2);
     applyPhaseConfig(manifest.metadata);
     return {
@@ -246,7 +263,7 @@ export async function loadViewerBootstrap({ onProgress } = {}) {
   } catch {
     try {
       reportBootstrap('manifest', 0);
-      const payload = await fetchJson('/data/phase_overlap.json');
+      const payload = await fetchJson(`${DATA_BASE}/phase_overlap.json`);
       reportBootstrap('electrodes', 2);
       applyPhaseConfig(payload.metadata);
       return {
@@ -259,7 +276,7 @@ export async function loadViewerBootstrap({ onProgress } = {}) {
       };
     } catch {
       reportBootstrap('manifest', 0);
-      const payload = await fetchJson('/data/phase_overlap_mock.json');
+      const payload = await fetchJson(`${DATA_BASE}/phase_overlap_mock.json`);
       reportBootstrap('electrodes', 2);
       applyPhaseConfig(payload.metadata);
       return {
@@ -277,7 +294,7 @@ export async function loadViewerBootstrap({ onProgress } = {}) {
 export async function loadSubjectTraces(manifest, subject) {
   if (!manifest?.files?.traces?.[subject]) return {};
   if (traceCache.has(subject)) return traceCache.get(subject);
-  const payload = await fetchJson(`/data/${manifest.files.traces[subject]}`);
+  const payload = await fetchJson(`${DATA_BASE}/${manifest.files.traces[subject]}`);
   const traces = payload.traces || {};
   traceCache.set(subject, traces);
   return traces;
@@ -325,7 +342,7 @@ export async function loadSubjectPhaseAnimation(manifest, subject, phase) {
   if (animationCache.has(cacheKey)) return animationCache.get(cacheKey);
   const path = manifest?.files?.animation?.[subject]?.[phase];
   if (!path) return null;
-  const payload = await fetchJson(`/data/${path}`);
+  const payload = await fetchJson(`${DATA_BASE}/${path}`);
   animationCache.set(cacheKey, payload);
   return payload;
 }
