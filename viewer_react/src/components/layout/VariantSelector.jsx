@@ -47,6 +47,14 @@ export default function VariantSelector({
 
   const datatypeLabel = (dt) => (dt === 'zscore' ? 'Z-score' : 'Difference');
   const axisLabel = (a) => (a === 'condition' ? 'Condition' : 'Phase');
+  // Human-readable diff-type chip labels; unknown types fall back to the raw key.
+  const diffTypeLabel = (dt) => ({
+    condition: 'Condition',
+    lexicality: 'Lexicality',
+    lexicalityEarly: 'Lexicality (early)',
+    lexicalityLate: 'Lexicality (late)',
+    neighborhood: 'Neighborhood',
+  }[dt] ?? dt);
 
   return (
     <div className="variant-selector">
@@ -74,6 +82,7 @@ export default function VariantSelector({
           options={diffTypes}
           value={spec.diffType}
           onSelect={(diffType) => onChange({ diffType })}
+          formatLabel={diffTypeLabel}
         />
       )}
       {isDiff && (

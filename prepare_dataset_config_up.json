@@ -23,6 +23,26 @@
         },
         "stats_rec_type": "stimType",
         "phases": ["Stimulus", "UP", "Delay", "Response"]
+      },
+      "lexicalityEarly": {
+        "directions": ["NwWd", "WdNw"],
+        "needs_condition": true,
+        "stim_type_map": {
+          "NwWd": ["Nonword", "Word"],
+          "WdNw": ["Word", "Nonword"]
+        },
+        "stats_rec_type": "lexicalityEarly",
+        "phases": ["Stimulus", "UP", "Delay", "Response"]
+      },
+      "lexicalityLate": {
+        "directions": ["NwWd", "WdNw"],
+        "needs_condition": true,
+        "stim_type_map": {
+          "NwWd": ["Nonword", "Word"],
+          "WdNw": ["Word", "Nonword"]
+        },
+        "stats_rec_type": "lexicalityLate",
+        "phases": ["Stimulus", "UP", "Delay", "Response"]
       }
     }
   },

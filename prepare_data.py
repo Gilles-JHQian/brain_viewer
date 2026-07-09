@@ -1044,17 +1044,27 @@ def prepare_hga_diff_data(output_dir: str):
         type_dir = os.path.join(diff_dir, diff_type)
         os.makedirs(type_dir, exist_ok=True)
 
-        if diff_type == 'condition':
-            _prepare_condition_diff(subjects, config, type_dir)
-        elif diff_type == 'lexicality':
-            _prepare_lexicality_diff(subjects, config, type_dir)
-        elif diff_type == 'neighborhood':
-            _prepare_neighborhood_diff(subjects, config, stim_props, type_dir)
+        # Dispatch by the trial-splitting map present in the config, so several
+        # diff types can share one code path when they have the same shape. The
+        # UP task's lexicality / lexicalityEarly / lexicalityLate all split trials
+        # by Word vs Nonword and differ only in which precomputed significance
+        # statistics they read (via ``stats_rec_type``); passing ``diff_type``
+        # through keeps their output folder, JSON ``diff_type`` field and stats
+        # lookup aligned.
+        if 'condition_map' in config:
+            _prepare_condition_diff(subjects, config, type_dir, diff_type)
+        elif 'stim_type_map' in config:
+            _prepare_lexicality_diff(subjects, config, type_dir, diff_type)
+        elif 'neighborhood_map' in config:
+            _prepare_neighborhood_diff(subjects, config, stim_props, type_dir, diff_type)
+        else:
+            print(f"    Warning: unknown diff-type shape for '{diff_type}', skipping")
 
     print(f"  Diff data export complete")
 
 
-def _prepare_condition_diff(subjects: List[str], config: dict, type_dir: str):
+def _prepare_condition_diff(subjects: List[str], config: dict, type_dir: str,
+                            diff_type: str = 'condition'):
     """
     Condition diff: compute from zscore epochs of two conditions.
     No condition dimension — just phase × direction.
@@ -1132,18 +1142,18 @@ def _prepare_condition_diff(subjects: List[str], config: dict, type_dir: str):
 
             sig_channels = _build_sig_channels(
                 subjects, all_ch_names, phase,
-                direction=direction, diff_type='condition'
+                direction=direction, diff_type=diff_type
             )
             mask = _build_sig_mask(
                 all_ch_names, n_times, phase,
-                direction=direction, diff_type='condition',
+                direction=direction, diff_type=diff_type,
                 times=times
             )
 
             diff_data = {
                 "phase": phase,
                 "condition": None,
-                "diff_type": "condition",
+                "diff_type": diff_type,
                 "direction": direction,
                 "times": np.round(times, 4).tolist(),
                 "sfreq": float(sfreq),
@@ -1166,10 +1176,19 @@ def _prepare_condition_diff(subjects: List[str], config: dict, type_dir: str):
             save_json(diff_data, os.path.join(type_dir, filename))
 
 
-def _prepare_lexicality_diff(subjects: List[str], config: dict, type_dir: str):
+def _prepare_lexicality_diff(subjects: List[str], config: dict, type_dir: str,
+                             diff_type: str = 'lexicality'):
     """
     Lexicality diff: split zscore trials by stim_type (Word/Nonword),
     compute group means and difference. Has condition dimension.
+
+    Shared by every diff type whose config carries a ``stim_type_map`` — the UP
+    task defines ``lexicality``, ``lexicalityEarly`` and ``lexicalityLate`` this
+    way. The Word-vs-Nonword waveforms are identical across them; they differ
+    only in which precomputed significance statistics are read, selected by the
+    diff type's ``stats_rec_type`` (see ``_get_statistics_h5_path``). ``diff_type``
+    therefore drives the stats lookup and the ``diff_type`` field written to each
+    JSON.
 
     A ``phases`` key in the diff-type config restricts which phases are exported
     (e.g. lexicality is undefined pre-stimulus, so UP omits Cue). Defaults to all
@@ -1245,18 +1264,18 @@ def _prepare_lexicality_diff(subjects: List[str], config: dict, type_dir: str):
                 sig_channels = _build_sig_channels(
                     subjects, all_ch_names, phase,
                     condition=condition, direction=direction,
-                    diff_type='lexicality'
+                    diff_type=diff_type
                 )
                 mask = _build_sig_mask(
                     all_ch_names, n_times, phase,
                     condition=condition, direction=direction,
-                    diff_type='lexicality', times=times
+                    diff_type=diff_type, times=times
                 )
 
                 diff_data = {
                     "phase": phase,
                     "condition": condition,
-                    "diff_type": "lexicality",
+                    "diff_type": diff_type,
                     "direction": direction,
                     "times": np.round(times, 4).tolist(),
                     "sfreq": float(sfreq),
@@ -1280,7 +1299,8 @@ def _prepare_lexicality_diff(subjects: List[str], config: dict, type_dir: str):
 
 
 def _prepare_neighborhood_diff(subjects: List[str], config: dict,
-                               stim_props: dict, type_dir: str):
+                               stim_props: dict, type_dir: str,
+                               diff_type: str = 'neighborhood'):
     """
     Neighborhood diff: split trials by neighborhood density
     (High/Low) using stim_properties.json. Has condition dimension.
@@ -1379,18 +1399,18 @@ def _prepare_neighborhood_diff(subjects: List[str], config: dict,
                 sig_channels = _build_sig_channels(
                     subjects, all_ch_names, phase,
                     condition=condition, direction=direction,
-                    diff_type='neighborhood'
+                    diff_type=diff_type
                 )
                 mask = _build_sig_mask(
                     all_ch_names, n_times_val, phase,
                     condition=condition, direction=direction,
-                    diff_type='neighborhood', times=times
+                    diff_type=diff_type, times=times
                 )
 
                 diff_data = {
                     "phase": phase,
                     "condition": condition,
-                    "diff_type": "neighborhood",
+                    "diff_type": diff_type,
                     "direction": direction,
                     "times": np.round(times, 4).tolist(),
                     "sfreq": float(sfreq),
