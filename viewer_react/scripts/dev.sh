@@ -19,7 +19,7 @@ VIEWER_DIR="$(dirname "$SCRIPT_DIR")"                 # .../viewer_react
 REPO_DIR="$(dirname "$VIEWER_DIR")"                   # .../brain_viewer
 LEX_DIR="$(dirname "$REPO_DIR")"                      # .../lexical_access
 DATA_DIR="${BRAIN_VIEWER_DATA:-$LEX_DIR/brain_viewer_data}"
-PORT="${PORT:-5173}"
+PORT="${PORT:-5174}"
 
 # --- put Node on PATH (HPC module install -> module system -> system node) ---
 NODE_BIN="${NODE_BIN:-/opt/apps/rhel8/node-v18.14.2-linux-x64/bin}"
