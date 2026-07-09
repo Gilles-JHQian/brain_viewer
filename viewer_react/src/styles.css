@@ -101,6 +101,64 @@ h1 {
   justify-content: flex-end;
 }
 
+/* Lazy-load progress bar occupying the topbar's empty middle. Invisible (but
+   still a flex spacer) when idle, so the title/controls do not shift. */
+.top-loadbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 12px;
+}
+.top-loadbar-inner {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.top-loadbar-track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #dbeafe;
+  overflow: hidden;
+}
+.top-loadbar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #3b82f6);
+  transition: width 180ms ease;
+}
+.top-loadbar-track.indeterminate .top-loadbar-sweep {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0), #3b82f6, rgba(59, 130, 246, 0));
+  animation: top-loadbar-sweep 1.1s ease-in-out infinite;
+}
+@keyframes top-loadbar-sweep {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(300%); }
+}
+.top-loadbar-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2563eb;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (prefers-reduced-motion: reduce) {
+  .top-loadbar-track.indeterminate .top-loadbar-sweep { animation-duration: 2.4s; }
+}
+
 .control-pill,
 .data-source-pill {
   display: flex;

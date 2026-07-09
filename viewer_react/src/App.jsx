@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, Brain, Info, FlaskConical } from 'lucide-react';
+import usePersistentState from './hooks/usePersistentState.js';
 import { PHASES, defaultPhaseBounds } from './constants/phases.js';
 import { VENN_MAX_PHASES, VENN_MIN_PHASES } from './constants/venn.js';
 import {
@@ -23,6 +24,7 @@ import WaveformPanel from './components/waveform/WaveformPanel.jsx';
 import ViewerInitialLoadScreen from './components/layout/ViewerInitialLoadScreen.jsx';
 import VariantSelector from './components/layout/VariantSelector.jsx';
 import SettingsPanel from './components/layout/SettingsPanel.jsx';
+import TopLoadBar from './components/layout/TopLoadBar.jsx';
 import { ANIM_WINDOW_SEC } from './constants/animation.js';
 import { KDE_BANDWIDTH, KDE_MAX_DISTANCE } from './brainKde.js';
 import { getSelectionEmptyState } from './utils/selectionEmptyState.js';
@@ -31,32 +33,40 @@ export default function App() {
   // brain_viewer has no Sternberg "load" axis; downstream components still take a
   // selectedLoad prop, so it is pinned to 'all'.
   const [selectedLoad] = useState('all');
-  // Analysis settings (adjustable in the settings panel).
-  const [windowSec, setWindowSec] = useState(ANIM_WINDOW_SEC);
-  const [kdeBandwidth, setKdeBandwidth] = useState(KDE_BANDWIDTH);
-  const [kdeMaxDistance, setKdeMaxDistance] = useState(KDE_MAX_DISTANCE);
+  // Analysis + display settings. These are persisted to localStorage (see
+  // usePersistentState) so the viewer reopens in the state the user last left it.
+  const [windowSec, setWindowSec] = usePersistentState('windowSec', ANIM_WINDOW_SEC);
+  const [kdeBandwidth, setKdeBandwidth] = usePersistentState('kdeBandwidth', KDE_BANDWIDTH);
+  const [kdeMaxDistance, setKdeMaxDistance] = usePersistentState('kdeMaxDistance', KDE_MAX_DISTANCE);
   // Animation: show only electrodes significant in the current window, or all significant.
-  const [sigWindowOnly, setSigWindowOnly] = useState(true);
+  const [sigWindowOnly, setSigWindowOnly] = usePersistentState('sigWindowOnly', true);
   // Time-course playback speed multiplier (1x = ANIM_STEP_SEC per frame).
-  const [playbackSpeed, setPlaybackSpeed] = useState(0.5);
+  const [playbackSpeed, setPlaybackSpeed] = usePersistentState('playbackSpeed', 0.5);
   // Per-phase time-course x-axis bounds (user overrides; defaults fill the rest).
-  const [phaseBounds, setPhaseBounds] = useState({});
+  const [phaseBounds, setPhaseBounds] = usePersistentState('phaseBounds', {});
   const setPhaseBound = useCallback((phase, key, value) => {
     setPhaseBounds((prev) => ({
       ...prev,
       [phase]: { ...(prev[phase] ?? defaultPhaseBounds(phase)), [key]: Number(value) },
     }));
   }, []);
-  const [brainViewMode, setBrainViewMode] = useState(DEFAULT_BRAIN_VIEW_MODE);
+  const [brainViewMode, setBrainViewMode] = usePersistentState('brainViewMode', DEFAULT_BRAIN_VIEW_MODE);
   // Left "Condition overlap selector" panel visibility (toggled in Settings to declutter).
-  const [showReferenceSelector, setShowReferenceSelector] = useState(true);
-  const [showVennOverSelector, setShowVennOverSelector] = useState(true);
+  const [showReferenceSelector, setShowReferenceSelector] = usePersistentState('showReferenceSelector', true);
+  const [showVennOverSelector, setShowVennOverSelector] = usePersistentState('showVennOverSelector', true);
   // Brain-map display controls (moved out of the brain toolbar into Settings).
-  const [colorDirection, setColorDirection] = useState('one'); // 'one' | 'two'
-  const [brainOpacity, setBrainOpacity] = useState(DEFAULT_ELECTRODE_BRAIN_OPACITY);
-  const [electrodeSizeScale, setElectrodeSizeScale] = useState(1);
-  // Opacity default differs by view mode; reset it on mode change (matches prior in-viewer behavior).
+  const [colorDirection, setColorDirection] = usePersistentState('colorDirection', 'one'); // 'one' | 'two'
+  const [brainOpacity, setBrainOpacity] = usePersistentState('brainOpacity', DEFAULT_ELECTRODE_BRAIN_OPACITY);
+  const [electrodeSizeScale, setElectrodeSizeScale] = usePersistentState('electrodeSizeScale', 1);
+  // Opacity default differs by view mode; reset it on mode change (matches prior in-viewer
+  // behavior). Skip the initial mount so a restored (persisted) opacity is not clobbered by
+  // the reset on load — only an actual mode change should reset it.
+  const brainViewModeMounted = useRef(false);
   useEffect(() => {
+    if (!brainViewModeMounted.current) {
+      brainViewModeMounted.current = true;
+      return;
+    }
     setBrainOpacity(
       brainViewMode === 'kde' ? DEFAULT_KDE_BRAIN_OPACITY : DEFAULT_ELECTRODE_BRAIN_OPACITY,
     );
@@ -310,6 +320,12 @@ export default function App() {
       <div className="tour-welcome-anchor" data-tour="tour-welcome" aria-hidden="true" />
       <header className="topbar">
         <h1 className="topbar-title"><Brain size={20} /> HGA viewer</h1>
+        <TopLoadBar
+          tracesLoading={tracesLoading}
+          tracesProgress={tracesLoadProgress}
+          variantLoading={variantLoading}
+          gridLoading={gridLoading}
+        />
         <div className="topbar-controls">
           <div className="load-selector task-selector" data-tour="task-selector">
             <span className="load-selector-label"><FlaskConical size={14} /> Task</span>
