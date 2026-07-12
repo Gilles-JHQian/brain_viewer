@@ -146,8 +146,8 @@ def load_config(config_path: Optional[str] = None) -> dict:
 def apply_config(config: dict):
     global CONFIG, CONFIG_PATH
     global BIDS_ROOT, SUBJECTS_DIR, RECON_DIR, A2009S_CSV, FS_COLOR_LUT
-    global TASK, BAND, REFERENCE, REFERENCES, PHASES, CONDITIONS, DIFF_TYPES
-    global DERIVATIVES_ROOT, STATISTICS_ROOT, STIM_PROPERTIES_PATH, MESH_DECIMATE_TARGET
+    global TASK, BAND, REFERENCE, REFERENCES, PHASES, CONDITIONS, DIFF_TYPES, RERP_CONFIG
+    global DERIVATIVES_ROOT, STATISTICS_ROOT, RERP_ROOT, STIM_PROPERTIES_PATH, MESH_DECIMATE_TARGET
 
     CONFIG = config
     CONFIG_PATH = config.get("_source_path")
@@ -186,11 +186,14 @@ def apply_config(config: dict):
     PHASES = data_cfg.get("phases", default_data["phases"])
     CONDITIONS = data_cfg.get("conditions", default_data["conditions"])
     DIFF_TYPES = data_cfg.get("diff_types", default_data["diff_types"])
+    # RERP (regression-ERP kernels) is optional; absent config -> no rerp step.
+    RERP_CONFIG = data_cfg.get("rerp", {})
 
     if DERIVATIVES_ROOT is None:
         DERIVATIVES_ROOT = os.path.join(BIDS_ROOT, f"derivatives/epoch({REFERENCE})")
     if STATISTICS_ROOT is None:
         STATISTICS_ROOT = os.path.join(BIDS_ROOT, "derivatives/statistics")
+    RERP_ROOT = os.path.join(BIDS_ROOT, f"derivatives/RERP({REFERENCE})")
 
     A2009S_CSV = os.path.join(BIDS_ROOT, "code", "a2009s.csv")
     FS_COLOR_LUT = os.path.join(BIDS_ROOT, "code", "FreeSurferColorLUT.txt")
@@ -203,9 +206,10 @@ apply_config(load_config())
 
 def set_reference(ref: str):
     """Switch the active reference and update dependent globals."""
-    global REFERENCE, DERIVATIVES_ROOT
+    global REFERENCE, DERIVATIVES_ROOT, RERP_ROOT
     REFERENCE = ref
     DERIVATIVES_ROOT = os.path.join(BIDS_ROOT, f"derivatives/epoch({REFERENCE})")
+    RERP_ROOT = os.path.join(BIDS_ROOT, f"derivatives/RERP({REFERENCE})")
 
 
 # =============================================================================
@@ -1024,6 +1028,163 @@ def prepare_hga_zscore_data(output_dir: str):
 
 
 # =============================================================================
+# 4c. RERP kernel data export (regression-ERP kernels)
+# =============================================================================
+def _discover_rerp_subjects() -> List[str]:
+    """Discover subjects that have a RERP kernel directory."""
+    subjects = []
+    if os.path.exists(RERP_ROOT):
+        for item in os.listdir(RERP_ROOT):
+            if item.startswith('sub-'):
+                subjects.append(item.replace('sub-', ''))
+    return sorted(subjects)
+
+
+def _load_rerp_kernel(subject: str, predictor: str, condition: str):
+    """
+    Load one RERP kernel for a subject/predictor/condition.
+
+    Files live under derivatives/RERP({ref})/sub-XXX/kernel/ as MNE EpochsFIF of
+    shape (1, n_channels, n_times) -- a single regression-kernel timecourse. Each
+    predictor has its own event-locked time window. Returns mne.Epochs or None
+    (many predictor x condition combos do not exist, e.g. Resperr is Decision-only).
+    """
+    bids_path = BIDSPath(
+        root=RERP_ROOT,
+        subject=subject,
+        datatype='kernel',
+        task=TASK,
+        processing=predictor,
+        description=condition,
+        suffix='kernel',
+        check=False,
+    )
+    matches = bids_path.match()
+    if not matches:
+        return None
+    try:
+        epoch = mne.read_epochs(matches[0].fpath, verbose=False)
+        if len(epoch) == 0:
+            return None
+        return epoch
+    except Exception as e:
+        warnings.warn(f"Could not load rerp kernel {subject}/{predictor}/{condition}: {e}")
+        return None
+
+
+def _build_rerp_sig(subjects, ch_names, predictor, condition, n_times, times):
+    """
+    Significance interface for RERP kernels -- currently a stub returning "none".
+
+    The UniquenessPoint dataset has no RERP statistics derivatives yet (the
+    derivatives/statistics tree only carries the zscore `car/` and diff `car(diff)/`
+    trees). Until a stats source exists, every electrode is shown unmasked.
+
+    To wire real stats in later, mirror `_build_sig_channels` / `_build_sig_mask`:
+    read a per-subject RERP stats H5 (e.g.
+    STATISTICS_ROOT/sub-{subject}/{REFERENCE}(rerp)/
+    sub-{subject}_task-{TASK}_proc-{predictor}_desc-{condition}_{BAND}.h5),
+    collect its significant channel names and build an (n_electrodes, n_times) mask
+    aligned to `times`. Return (list_of_sig_ch_names, mask_or_None).
+    """
+    return [], None
+
+
+def prepare_rerp_data(output_dir: str):
+    """
+    Export RERP kernel data for all predictor/condition combinations.
+
+    Mirrors `prepare_hga_zscore_data` (single per-electrode timecourse, no
+    act/baseline split). Each kernel is a single "trial", so there is no
+    trial-level SEM. Writes rerp/{predictor}_{condition}.json; sparse
+    predictor x condition combos that no subject has are skipped.
+    """
+    print("\n=== Preparing RERP kernel data ===")
+
+    predictors = RERP_CONFIG.get("predictors", [])
+    if not predictors:
+        print("  No rerp.predictors in config; skipping RERP export")
+        return
+
+    rerp_dir = os.path.join(output_dir, "rerp")
+    os.makedirs(rerp_dir, exist_ok=True)
+
+    subjects = _discover_rerp_subjects()
+    print(f"  Found {len(subjects)} RERP subjects")
+
+    for predictor in predictors:
+        for condition in CONDITIONS:
+            all_kernels = []
+            all_ch_names = []
+            all_nave = []
+            times = None
+            sfreq = None
+
+            for subject in tqdm(subjects, desc=f'    {predictor}/{condition}', leave=False):
+                epoch = _load_rerp_kernel(subject, predictor, condition)
+                if epoch is None:
+                    continue
+
+                kernel = epoch._data[0]  # (n_ch, n_times) -- single kernel "trial"
+
+                if times is None:
+                    times = epoch.times
+                    sfreq = epoch.info['sfreq']
+                elif len(epoch.times) != len(times):
+                    # Within one predictor all subjects share a window; guard a stray mismatch.
+                    warnings.warn(
+                        f"rerp {predictor}/{condition}: {subject} time axis "
+                        f"{len(epoch.times)} != {len(times)}, skipping subject"
+                    )
+                    continue
+
+                nave = 1
+                if (epoch.metadata is not None
+                        and 'nave' in epoch.metadata.columns):
+                    try:
+                        nave = int(epoch.metadata['nave'].iloc[0])
+                    except Exception:
+                        nave = 1
+
+                ch_names = _prefix_ch_names(epoch.ch_names, subject)
+                all_kernels.append(kernel)
+                all_ch_names.extend(ch_names)
+                all_nave.extend([nave] * len(ch_names))
+
+            if not all_kernels:
+                continue
+
+            concat = np.concatenate(all_kernels, axis=0)
+            n_electrodes = concat.shape[0]
+            n_times = concat.shape[1]
+
+            sig_channels, mask = _build_rerp_sig(
+                subjects, all_ch_names, predictor, condition, n_times, times
+            )
+
+            rerp_data = {
+                "predictor": predictor,
+                "condition": condition,
+                "times": np.round(times, 4).tolist(),
+                "sfreq": float(sfreq),
+                "channel_names": all_ch_names,
+                "n_electrodes": n_electrodes,
+                "n_times": n_times,
+                "data": _compress_array(concat),
+                "trial_sem": None,        # single-trial kernel -> no trial SEM
+                "n_trials": all_nave,
+                "sig_channels": sig_channels,
+                "mask": mask.tolist() if mask is not None else None,
+            }
+
+            filename = f"{predictor}_{condition}.json"
+            save_json(rerp_data, os.path.join(rerp_dir, filename))
+            print(f"  rerp {predictor}/{condition}: {n_electrodes} electrodes")
+
+    print(f"  RERP data export complete")
+
+
+# =============================================================================
 # 4b. HGA diff data export (computed from zscore epochs)
 # =============================================================================
 def prepare_hga_diff_data(output_dir: str):
@@ -1480,10 +1641,16 @@ def prepare_metadata(output_dir: str):
                     diff_files[dtype] = sorted([
                         f for f in os.listdir(dtype_dir) if f.endswith('.json')
                     ])
-        
+
+        rerp_files = []
+        rerp_dir = os.path.join(ref_dir, "rerp")
+        if os.path.exists(rerp_dir):
+            rerp_files = sorted([f for f in os.listdir(rerp_dir) if f.endswith('.json')])
+
         available_data[ref] = {
             "zscore": zscore_files,
             "diff": diff_files,
+            "rerp": rerp_files,
         }
     
     metadata = {
@@ -1545,7 +1712,11 @@ def main():
         "--skip-diff", action="store_true",
         help="Skip diff HGA data generation"
     )
-    
+    parser.add_argument(
+        "--skip-rerp", action="store_true",
+        help="Skip RERP kernel data generation"
+    )
+
     args = parser.parse_args()
     apply_config(load_config(args.config))
     output_dir = os.path.abspath(args.output_dir)
@@ -1591,7 +1762,11 @@ def main():
         # Step 5: HGA diff data
         if not args.skip_diff:
             prepare_hga_diff_data(ref_output_dir)
-    
+
+        # Step 5b: RERP kernel data
+        if not args.skip_rerp:
+            prepare_rerp_data(ref_output_dir)
+
     # Step 6: Metadata summary (covers all references)
     prepare_metadata(output_dir)
     
