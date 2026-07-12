@@ -39,13 +39,15 @@ export default function VariantSelector({
 
   const {
     references, datatypes, conditions, phases, diffTypes, diffTypesMeta, axes,
-    conditionAxisDisabled,
+    conditionAxisDisabled, rerpPredictors = [], rerpLabels = {},
   } = options;
   const isDiff = spec.datatype === 'diff';
+  const isRerp = spec.datatype === 'rerp';
   const directions = isDiff ? (diffTypesMeta?.[spec.diffType]?.directions ?? []) : [];
   const hasCondition = !isDiff || !!diffTypesMeta?.[spec.diffType]?.needs_condition;
 
-  const datatypeLabel = (dt) => (dt === 'zscore' ? 'Z-score' : 'Difference');
+  const datatypeLabel = (dt) => ({ zscore: 'Z-score', diff: 'Difference', rerp: 'RERP' }[dt] ?? dt);
+  const rerpPredictorLabel = (p) => (rerpLabels?.[p] ?? p);
   const axisLabel = (a) => (a === 'condition' ? 'Condition' : 'Phase');
   // Human-readable diff-type chip labels; unknown types fall back to the raw key.
   const diffTypeLabel = (dt) => ({
@@ -94,6 +96,16 @@ export default function VariantSelector({
           onSelect={(direction) => onChange({ direction })}
         />
       )}
+      {isRerp && (
+        <ChipGroup
+          icon={<GitCompare size={14} />}
+          label="Predictor"
+          options={rerpPredictors}
+          value={spec.rerpPredictor}
+          onSelect={(rerpPredictor) => onChange({ rerpPredictor })}
+          formatLabel={rerpPredictorLabel}
+        />
+      )}
       {showVennOver && axes?.length > 1 && (
         <ChipGroup
           icon={<Shuffle size={14} />}
@@ -102,12 +114,15 @@ export default function VariantSelector({
           value={spec.axis}
           onSelect={(axis) => onChange({ axis })}
           formatLabel={axisLabel}
-          disabled={conditionAxisDisabled ? ['condition'] : []}
-          disabledTitle="This difference is already over conditions"
+          disabled={isRerp ? ['phase'] : (conditionAxisDisabled ? ['condition'] : [])}
+          disabledTitle={isRerp
+            ? 'RERP has no phase axis'
+            : 'This difference is already over conditions'}
         />
       )}
-      {/* The fixed dimension is the one the Venn is NOT iterating over. */}
-      {spec.axis === 'condition' && (
+      {/* The fixed dimension is the one the Venn is NOT iterating over. RERP replaces
+          the phase axis with the Predictor dropdown above, so no Phase chip here. */}
+      {spec.axis === 'condition' && !isRerp && (
         <ChipGroup
           icon={<Activity size={14} />}
           label="Phase"

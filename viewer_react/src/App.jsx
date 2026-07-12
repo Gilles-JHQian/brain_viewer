@@ -190,9 +190,18 @@ export default function App() {
   }, [gridPhasesKey]);
 
   // Per-panel-phase time-course bounds (real-phase-keyed; user overrides, else defaults).
+  // RERP "phases" are predictors with their own event-locked windows (and no fixed
+  // defaults), so use the manifest's per-predictor time ranges when in RERP mode.
+  const isRerpView = spec?.datatype === 'rerp';
+  const rerpTimeRanges = data?.metadata?.rerp_time_ranges ?? {};
   const panelPhaseBounds = useMemo(() => Object.fromEntries(
-    activePanelPhases.map((phase) => [phase, phaseBounds[phase] ?? defaultPhaseBounds(phase)]),
-  ), [activePanelPhases, phaseBounds]);
+    activePanelPhases.map((phase) => [
+      phase,
+      phaseBounds[phase]
+        ?? (isRerpView ? rerpTimeRanges[phase] : undefined)
+        ?? defaultPhaseBounds(phase),
+    ]),
+  ), [activePanelPhases, phaseBounds, isRerpView, rerpTimeRanges]);
 
   // Re-slice the grid at the map's condition into the traces[id][phase].all shape the
   // animation + electrode-HGA code consume.
@@ -498,7 +507,9 @@ export default function App() {
           gridLoading={gridLoading}
           panelPhases={activePanelPhases}
           availablePhases={gridPhases}
-          phaseLabels={data.metadata?.phase_labels ?? {}}
+          phaseLabels={spec?.datatype === 'rerp'
+            ? (data.metadata?.rerp_labels ?? {})
+            : (data.metadata?.phase_labels ?? {})}
           onTogglePanelPhase={togglePanelPhase}
           overlayIsDiff={spec?.datatype === 'diff'}
           expandable={spec?.datatype === 'diff' && gridHasCondition}

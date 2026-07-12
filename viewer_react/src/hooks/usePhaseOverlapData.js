@@ -90,6 +90,8 @@ export default function usePhaseOverlapData() {
   const isVariantLayout = layout === 'variant';
 
   const diffTypesMeta = metadata?.diff_types ?? {};
+  const rerpPredictors = metadata?.rerp_predictors ?? [];
+  const rerpLabels = metadata?.rerp_labels ?? {};
 
   // Initialize the spec from the bootstrap's default once available.
   useEffect(() => {
@@ -297,7 +299,8 @@ export default function usePhaseOverlapData() {
   // A datatype carries a condition dimension (so condition-axis Venn is meaningful) when it
   // is zscore, or a diff type that needs a condition. condition-diff has no condition dim.
   const datatypeHasCondition = (datatype, diffType) => (
-    datatype === 'zscore' || !!diffTypesMeta?.[diffType]?.needs_condition
+    datatype === 'zscore' || datatype === 'rerp'
+    || !!diffTypesMeta?.[diffType]?.needs_condition
   );
 
   // --- variant selector options (consumed by the top-bar VariantSelector) ---
@@ -317,12 +320,14 @@ export default function usePhaseOverlapData() {
       phases: phaseOptions,
       diffTypes: Object.keys(diffTypesMeta),
       diffTypesMeta,
+      rerpPredictors,
+      rerpLabels,
       // Always expose both axes; condition-overlap is disabled (not hidden) when the
       // datatype has no condition dimension (condition-diff).
       axes: ['phase', 'condition'],
       conditionAxisDisabled: !datatypeHasCondition(spec.datatype, spec.diffType),
     };
-  }, [isVariantLayout, metadata, spec, diffTypesMeta]);
+  }, [isVariantLayout, metadata, spec, diffTypesMeta, rerpPredictors, rerpLabels]);
 
   // Apply a partial change to the spec, filling defaults so the result is valid:
   //  - switching to diff picks a diff type + direction (+ condition if needed)
@@ -343,6 +348,14 @@ export default function usePhaseOverlapData() {
         if (Array.isArray(dphases) && dphases.length && !dphases.includes(next.fixedPhase)) {
           next.fixedPhase = dphases[0];
         }
+      }
+      if (next.datatype === 'rerp') {
+        // RERP has no phase axis; the predictor is picked from its own dropdown and
+        // the Venn overlays conditions. Keep the predictor valid on switch.
+        if (!next.rerpPredictor || !rerpPredictors.includes(next.rerpPredictor)) {
+          next.rerpPredictor = rerpPredictors[0] ?? null;
+        }
+        next.axis = 'condition';
       }
       if (!datatypeHasCondition(next.datatype, next.diffType)) {
         next.axis = 'phase';

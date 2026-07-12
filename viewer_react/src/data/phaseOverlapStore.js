@@ -105,11 +105,17 @@ async function loadReferenceElectrodes(manifest, reference) {
 // build_viewer_assets.py's layout. `member` is a phase (axis='phase') or a condition
 // (axis='condition'); the other dimension is taken from the spec's fixed value.
 export function resolveVariantFile(spec, member, diffMeta) {
-  const { reference, datatype, diffType, direction, axis, fixedPhase, fixedCondition } = spec;
+  const {
+    reference, datatype, diffType, direction, rerpPredictor, axis, fixedPhase, fixedCondition,
+  } = spec;
   const phase = axis === 'condition' ? fixedPhase : member;
   const condition = axis === 'condition' ? member : fixedCondition;
   if (datatype === 'zscore') {
     return `${reference}/zscore/${phase}_${condition}.json`;
+  }
+  if (datatype === 'rerp') {
+    // RERP has no phase axis; the predictor occupies the phase-file slot.
+    return `${reference}/rerp/${rerpPredictor}_${condition}.json`;
   }
   const needsCond = diffMeta?.[diffType]?.needs_condition;
   const suffix = needsCond && condition ? `_${condition}` : '';
@@ -190,6 +196,8 @@ function buildVariantTraces(phasePayloads, phases, labels = null) {
 // subset when present — otherwise the omitted phase shows up as an empty member.
 export function specMembers(metadata, spec) {
   if (spec.axis === 'condition') return metadata.conditions || [];
+  // RERP has no phase axis; the sole phase-member is the selected predictor.
+  if (spec.datatype === 'rerp') return spec.rerpPredictor ? [spec.rerpPredictor] : [];
   const phases = metadata.phases || [];
   if (spec.datatype === 'diff') {
     const diffPhases = metadata.diff_types?.[spec.diffType]?.phases;
@@ -208,6 +216,7 @@ export function defaultVariantSpec(metadata) {
     datatype: 'zscore',
     diffType: null,
     direction: null,
+    rerpPredictor: null,
     axis: 'condition',
     fixedPhase: (metadata.phases || [])[0] ?? null,
     fixedCondition: (metadata.conditions || [])[0] ?? null,
@@ -243,6 +252,14 @@ export async function loadVariant(manifest, spec) {
 // it collapses to a single synthetic member -> one line/phase.
 export function gridAxesForSpec(metadata, spec) {
   const diffMeta = metadata?.diff_types || {};
+  // RERP: one "phase" row = the selected predictor; grid iterates over conditions.
+  if (spec?.datatype === 'rerp') {
+    return {
+      phases: spec.rerpPredictor ? [spec.rerpPredictor] : [],
+      conditions: metadata?.conditions || [],
+      hasCondition: true,
+    };
+  }
   const allPhases = metadata?.phases || [];
   let phases = allPhases;
   if (spec?.datatype === 'diff') {
