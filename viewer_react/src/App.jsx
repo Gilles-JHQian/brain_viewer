@@ -135,7 +135,12 @@ export default function App() {
     tableElectrodes,
     tableElectrodesKey,
     roiBarItems,
-  } = useSelectionPipeline({ subjectFilteredElectrodes, electrodeById, vennMembers });
+  } = useSelectionPipeline({
+    subjectFilteredElectrodes,
+    electrodeById,
+    vennMembers,
+    bypassVenn: spec?.datatype === 'rerp',
+  });
 
   // Full phase x condition grid for the active spec — powers the fixed time-course panel
   // (all conditions overlaid per phase) and the brain-map condition slice.
@@ -379,7 +384,9 @@ export default function App() {
         <aside className="panel venn-panel">
           <PanelTitle
             icon={<Activity size={18} />}
-            title={`${spec?.axis === 'condition' ? 'Condition' : 'Phase'} overlap selector`}
+            title={isRerpView
+              ? 'RERP electrode selector'
+              : `${spec?.axis === 'condition' ? 'Condition' : 'Phase'} overlap selector`}
           />
           <VariantSelector
             spec={spec}
@@ -389,38 +396,45 @@ export default function App() {
             showReference={showReferenceSelector}
             showVennOver={showVennOverSelector}
           />
-          <VennPanel
-            vennPhases={vennPhases}
-            regions={vennRegions}
-            availableSubjects={availableSubjects}
-            selectedSubjects={selectedSubjects}
-            onToggleSubject={(subject) => {
-              toggleSubject(subject);
-              clearSelectedElectrode();
-            }}
-            onSelectAllSubjects={() => {
-              selectAllSubjects();
-              clearSelectedElectrode();
-            }}
-            onDeselectAllSubjects={() => {
-              deselectAllSubjects();
-              clearSelectedElectrode();
-            }}
-            selectedRegionIds={selectedRegionIds}
-            onTogglePhase={(phase) => {
-              setVennPhases((current) => {
-                if (current.includes(phase)) {
-                  if (current.length <= VENN_MIN_PHASES) return current;
-                  return current.filter((item) => item !== phase);
-                }
-                if (current.length >= VENN_MAX_PHASES) return current;
-                return PHASES.filter((item) => current.includes(item) || item === phase);
-              });
-            }}
-            onSelect={(id) => {
-              selectRegion(id);
-            }}
-          />
+          {isRerpView ? (
+            <div className="venn-unavailable">
+              Venn overlap is unavailable for RERP (no significance statistics yet).
+              All electrodes are shown.
+            </div>
+          ) : (
+            <VennPanel
+              vennPhases={vennPhases}
+              regions={vennRegions}
+              availableSubjects={availableSubjects}
+              selectedSubjects={selectedSubjects}
+              onToggleSubject={(subject) => {
+                toggleSubject(subject);
+                clearSelectedElectrode();
+              }}
+              onSelectAllSubjects={() => {
+                selectAllSubjects();
+                clearSelectedElectrode();
+              }}
+              onDeselectAllSubjects={() => {
+                deselectAllSubjects();
+                clearSelectedElectrode();
+              }}
+              selectedRegionIds={selectedRegionIds}
+              onTogglePhase={(phase) => {
+                setVennPhases((current) => {
+                  if (current.includes(phase)) {
+                    if (current.length <= VENN_MIN_PHASES) return current;
+                    return current.filter((item) => item !== phase);
+                  }
+                  if (current.length >= VENN_MAX_PHASES) return current;
+                  return PHASES.filter((item) => current.includes(item) || item === phase);
+                });
+              }}
+              onSelect={(id) => {
+                selectRegion(id);
+              }}
+            />
+          )}
         </aside>
 
         <section className="panel brain-panel">

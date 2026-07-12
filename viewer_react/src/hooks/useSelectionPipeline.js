@@ -8,6 +8,7 @@ export default function useSelectionPipeline({
   subjectFilteredElectrodes,
   electrodeById,
   vennMembers = null,
+  bypassVenn = false,
 }) {
   const [vennPhases, setVennPhases] = useState(() => [...DEFAULT_VENN_PHASES]);
   const [selectedRegionIds, setSelectedRegionIds] = useState(() => [DEFAULT_VENN_PHASES.join('_')]);
@@ -53,9 +54,14 @@ export default function useSelectionPipeline({
     return ids;
   }, [selectedRegions]);
 
+  // RERP has no significance statistics, so the Venn selection is empty and would hide
+  // every electrode. When bypassVenn is set we skip the Venn gate and take all electrodes
+  // (ROI filtering below still applies).
   const vennSelectedElectrodes = useMemo(
-    () => subjectFilteredElectrodes.filter((electrode) => selectedIds.has(electrode.id)),
-    [subjectFilteredElectrodes, selectedIds],
+    () => (bypassVenn
+      ? subjectFilteredElectrodes
+      : subjectFilteredElectrodes.filter((electrode) => selectedIds.has(electrode.id))),
+    [subjectFilteredElectrodes, selectedIds, bypassVenn],
   );
 
   const availableRois = useMemo(() => {

@@ -106,7 +106,7 @@ export default function VariantSelector({
           formatLabel={rerpPredictorLabel}
         />
       )}
-      {showVennOver && axes?.length > 1 && (
+      {showVennOver && !isRerp && axes?.length > 1 && (
         <ChipGroup
           icon={<Shuffle size={14} />}
           label="Venn over"
