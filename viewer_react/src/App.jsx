@@ -112,6 +112,14 @@ export default function App() {
     updateVariant,
   } = usePhaseOverlapData();
 
+  // RERP significance exists only for some predictors (the lexicality regressors).
+  // When the active RERP variant has no significant electrodes, fall back to showing
+  // all electrodes with the Venn disabled; when it does, it behaves like a normal
+  // significance-driven category (Venn over conditions + mask highlighting).
+  const isRerpView = spec?.datatype === 'rerp';
+  const rerpNoSig = isRerpView
+    && !subjectFilteredElectrodes.some((e) => (e.active_phases?.length ?? 0) > 0);
+
   const {
     vennPhases,
     setVennPhases,
@@ -139,7 +147,7 @@ export default function App() {
     subjectFilteredElectrodes,
     electrodeById,
     vennMembers,
-    bypassVenn: spec?.datatype === 'rerp',
+    bypassVenn: rerpNoSig,
   });
 
   // Full phase x condition grid for the active spec — powers the fixed time-course panel
@@ -197,7 +205,6 @@ export default function App() {
   // Per-panel-phase time-course bounds (real-phase-keyed; user overrides, else defaults).
   // RERP "phases" are predictors with their own event-locked windows (and no fixed
   // defaults), so use the manifest's per-predictor time ranges when in RERP mode.
-  const isRerpView = spec?.datatype === 'rerp';
   const rerpTimeRanges = data?.metadata?.rerp_time_ranges ?? {};
   const panelPhaseBounds = useMemo(() => Object.fromEntries(
     activePanelPhases.map((phase) => [
@@ -384,7 +391,7 @@ export default function App() {
         <aside className="panel venn-panel">
           <PanelTitle
             icon={<Activity size={18} />}
-            title={isRerpView
+            title={rerpNoSig
               ? 'RERP electrode selector'
               : `${spec?.axis === 'condition' ? 'Condition' : 'Phase'} overlap selector`}
           />
@@ -394,12 +401,12 @@ export default function App() {
             loading={variantLoading}
             onChange={updateVariant}
             showReference={showReferenceSelector}
-            showVennOver={showVennOverSelector}
+            showVennOver={showVennOverSelector && !rerpNoSig}
           />
-          {isRerpView ? (
+          {rerpNoSig ? (
             <div className="venn-unavailable">
-              Venn overlap is unavailable for RERP (no significance statistics yet).
-              All electrodes are shown.
+              Venn overlap is unavailable for this RERP predictor (no significance
+              statistics). All electrodes are shown.
             </div>
           ) : (
             <VennPanel

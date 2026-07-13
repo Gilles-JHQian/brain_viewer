@@ -1072,22 +1072,75 @@ def _load_rerp_kernel(subject: str, predictor: str, condition: str):
         return None
 
 
+def _rerp_stats_h5_path(subject: str, predictor: str, condition: str) -> str:
+    """Path to a RERP statistics H5 (statistics/sub-XXX/{REF}(rERP)/...).
+
+    Note the derivative folder capitalisation is `(rERP)`, and the file suffix is
+    `kernel` (not the band), e.g.
+    sub-D0065_task-UniquenessPoint_proc-uplex_desc-Decision_kernel.h5.
+    """
+    stat_dir = os.path.join(STATISTICS_ROOT, f'sub-{subject}', f'{REFERENCE}(rERP)')
+    filename = f'sub-{subject}_task-{TASK}_proc-{predictor}_desc-{condition}_kernel.h5'
+    return os.path.join(stat_dir, filename)
+
+
 def _build_rerp_sig(subjects, ch_names, predictor, condition, n_times, times):
     """
-    Significance interface for RERP kernels -- currently a stub returning "none".
+    Significance for a RERP (predictor, condition) from statistics/{REF}(rERP).
 
-    The UniquenessPoint dataset has no RERP statistics derivatives yet (the
-    derivatives/statistics tree only carries the zscore `car/` and diff `car(diff)/`
-    trees). Until a stats source exists, every electrode is shown unmasked.
+    Same H5 schema as the diff statistics (`sig_ch_names`, `ch_names`, `mask`,
+    `times`). Only some predictors have stats (currently the lexicality regressors
+    uplex/offlex); predictors/subjects without a stats file simply contribute no
+    significance, so the viewer falls back to showing all electrodes for them.
 
-    To wire real stats in later, mirror `_build_sig_channels` / `_build_sig_mask`:
-    read a per-subject RERP stats H5 (e.g.
-    STATISTICS_ROOT/sub-{subject}/{REFERENCE}(rerp)/
-    sub-{subject}_task-{TASK}_proc-{predictor}_desc-{condition}_{BAND}.h5),
-    collect its significant channel names and build an (n_electrodes, n_times) mask
-    aligned to `times`. Return (list_of_sig_ch_names, mask_or_None).
+    Returns (sorted sig_ch_names, (n_electrodes, n_times) int mask or None).
     """
-    return [], None
+    sig_set = set()
+    n_electrodes = len(ch_names)
+    combined_mask = np.zeros((n_electrodes, n_times), dtype=np.int64)
+    any_mask = False
+
+    subject_channels = {}
+    for i, ch in enumerate(ch_names):
+        subj = ch.split('_', 1)[0]
+        subject_channels.setdefault(subj, []).append((ch, i))
+
+    for subj, ch_list in subject_channels.items():
+        h5_path = _rerp_stats_h5_path(subj, predictor, condition)
+        if not os.path.exists(h5_path):
+            continue
+        try:
+            with h5py.File(h5_path, 'r') as f:
+                if 'sig_ch_names' in f:
+                    sig_set.update(
+                        n.decode('utf-8') if isinstance(n, bytes) else str(n)
+                        for n in f['sig_ch_names'][:]
+                    )
+                if 'ch_names' in f and 'mask' in f:
+                    h5_names = [
+                        n.decode('utf-8') if isinstance(n, bytes) else str(n)
+                        for n in f['ch_names'][:]
+                    ]
+                    h5_mask = f['mask'][:]
+                    stat_times = f['times'][:] if 'times' in f else None
+                    h5_idx = {name: k for k, name in enumerate(h5_names)}
+                    mask_len = h5_mask.shape[1]
+                    # rERP stats share the predictor's window, so offset is
+                    # normally 0; align by the file's own times when present.
+                    offset = 0
+                    if times is not None and stat_times is not None and len(stat_times):
+                        offset = int(np.searchsorted(times, float(stat_times[0])))
+                    offset = max(0, offset)
+                    for ch_name, global_idx in ch_list:
+                        if ch_name in h5_idx:
+                            end = min(offset + mask_len, n_times)
+                            combined_mask[global_idx, offset:end] = \
+                                h5_mask[h5_idx[ch_name], :end - offset]
+                            any_mask = True
+        except Exception as e:
+            warnings.warn(f"Could not load rerp stats {h5_path}: {e}")
+
+    return sorted(sig_set), (combined_mask if any_mask else None)
 
 
 def prepare_rerp_data(output_dir: str):
