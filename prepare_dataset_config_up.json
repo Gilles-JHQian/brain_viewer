@@ -44,6 +44,20 @@
         "stats_rec_type": "lexicalityLate",
         "phases": ["Stimulus", "UP", "Delay", "Response"]
       }
+    },
+    "rerp": {
+      "predictors": ["Stim", "Offset", "UP", "Resp", "Resperr", "stimdur", "uplex", "uplogfreq", "offlex"],
+      "labels": {
+        "Stim": "Stimulus onset",
+        "Offset": "Stimulus offset",
+        "UP": "Uniqueness point",
+        "Resp": "Response",
+        "Resperr": "Response error",
+        "stimdur": "Stimulus duration",
+        "uplex": "UP lexicality",
+        "uplogfreq": "UP log-frequency",
+        "offlex": "Offset lexicality"
+      }
     }
   },
   "mesh_decimate_target": 50000

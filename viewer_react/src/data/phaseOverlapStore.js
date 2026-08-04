@@ -1,6 +1,7 @@
 import { applyPhaseConfig, applyVennAxisConfig, vennAxisConfig } from '../constants/phaseConfig.js';
 import { attachPhaseFlags } from '../utils/phaseFlags.js';
 import { attachElectrodeHga } from '../utils/electrodeHga.js';
+import { glmTypePredictors, glmDefaultType } from '../constants/glm.js';
 
 const TRACE_CACHE_MAX = 48;
 
@@ -105,11 +106,17 @@ async function loadReferenceElectrodes(manifest, reference) {
 // build_viewer_assets.py's layout. `member` is a phase (axis='phase') or a condition
 // (axis='condition'); the other dimension is taken from the spec's fixed value.
 export function resolveVariantFile(spec, member, diffMeta) {
-  const { reference, datatype, diffType, direction, axis, fixedPhase, fixedCondition } = spec;
+  const {
+    reference, datatype, diffType, direction, axis, fixedPhase, fixedCondition,
+  } = spec;
   const phase = axis === 'condition' ? fixedPhase : member;
   const condition = axis === 'condition' ? member : fixedCondition;
   if (datatype === 'zscore') {
     return `${reference}/zscore/${phase}_${condition}.json`;
+  }
+  if (datatype === 'rerp') {
+    // GLM iterates predictors over the phase axis; the resolved `phase` IS the predictor key.
+    return `${reference}/rerp/${phase}_${condition}.json`;
   }
   const needsCond = diffMeta?.[diffType]?.needs_condition;
   const suffix = needsCond && condition ? `_${condition}` : '';
@@ -189,6 +196,14 @@ function buildVariantTraces(phasePayloads, phases, labels = null) {
 // lexicality omits the pre-stimulus Cue), so restrict phase-axis members to that
 // subset when present — otherwise the omitted phase shows up as an empty member.
 export function specMembers(metadata, spec) {
+  // GLM's Venn is over the three tasks (conditions); the fixed phase (predictor) supplies
+  // each task circle's significance. (Time-course columns come from gridAxesForSpec, not
+  // these members.)
+  if (spec.datatype === 'rerp') {
+    return spec.axis === 'condition'
+      ? (metadata.conditions || [])
+      : glmTypePredictors(metadata, spec.rerpType);
+  }
   if (spec.axis === 'condition') return metadata.conditions || [];
   const phases = metadata.phases || [];
   if (spec.datatype === 'diff') {
@@ -208,6 +223,7 @@ export function defaultVariantSpec(metadata) {
     datatype: 'zscore',
     diffType: null,
     direction: null,
+    rerpType: glmDefaultType(metadata),
     axis: 'condition',
     fixedPhase: (metadata.phases || [])[0] ?? null,
     fixedCondition: (metadata.conditions || [])[0] ?? null,
@@ -243,6 +259,15 @@ export async function loadVariant(manifest, spec) {
 // it collapses to a single synthetic member -> one line/phase.
 export function gridAxesForSpec(metadata, spec) {
   const diffMeta = metadata?.diff_types || {};
+  // GLM: the phase axis = the selected type's predictors (time-course columns); the grid
+  // iterates those predictors over conditions.
+  if (spec?.datatype === 'rerp') {
+    return {
+      phases: glmTypePredictors(metadata, spec.rerpType),
+      conditions: metadata?.conditions || [],
+      hasCondition: true,
+    };
+  }
   const allPhases = metadata?.phases || [];
   let phases = allPhases;
   if (spec?.datatype === 'diff') {
@@ -366,7 +391,7 @@ export async function loadViewerBootstrap({ onProgress, dataBase } = {}) {
     // brain_viewer variant layout: derive member flags + traces for the default spec.
     if (manifest.layout === 'variant') {
       const spec = defaultVariantSpec(manifest.metadata);
-      applyVennAxisConfig(vennAxisConfig(manifest.metadata, spec.axis, spec.fixedPhase));
+      applyVennAxisConfig(vennAxisConfig(manifest.metadata, spec.axis, spec.fixedPhase, spec));
       const { electrodes, traces, hgaScale, members } = await loadVariant(manifest, spec);
       reportBootstrap('electrodes', 2);
       return {

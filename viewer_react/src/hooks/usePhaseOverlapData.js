@@ -7,6 +7,9 @@ import {
   defaultVariantSpec,
 } from '../data/phaseOverlapStore.js';
 import { applyVennAxisConfig, vennAxisConfig } from '../constants/phaseConfig.js';
+import {
+  glmAvailableTypes, glmDefaultType, glmTypePredictors, glmPhaseLabels,
+} from '../constants/glm.js';
 import { TASKS, DEFAULT_TASK_ID, taskById } from '../constants/tasks.js';
 
 const BOOTSTRAP_LOAD_WEIGHT = 0.15;
@@ -116,7 +119,7 @@ export default function usePhaseOverlapData() {
     if (!isVariantLayout || !manifest || !spec) return undefined;
     if (specKey === loadedSpecKey) return undefined;
     let cancelled = false;
-    applyVennAxisConfig(vennAxisConfig(metadata, spec.axis, spec.fixedPhase));
+    applyVennAxisConfig(vennAxisConfig(metadata, spec.axis, spec.fixedPhase, spec));
     setVariantLoading(true);
     loadVariant(manifest, spec)
       .then((result) => {
@@ -297,7 +300,8 @@ export default function usePhaseOverlapData() {
   // A datatype carries a condition dimension (so condition-axis Venn is meaningful) when it
   // is zscore, or a diff type that needs a condition. condition-diff has no condition dim.
   const datatypeHasCondition = (datatype, diffType) => (
-    datatype === 'zscore' || !!diffTypesMeta?.[diffType]?.needs_condition
+    datatype === 'zscore' || datatype === 'rerp'
+    || !!diffTypesMeta?.[diffType]?.needs_condition
   );
 
   // --- variant selector options (consumed by the top-bar VariantSelector) ---
@@ -317,6 +321,10 @@ export default function usePhaseOverlapData() {
       phases: phaseOptions,
       diffTypes: Object.keys(diffTypesMeta),
       diffTypesMeta,
+      rerpTypes: glmAvailableTypes(metadata),
+      // GLM phase (predictor) picker: which phase's significance defines the task Venn.
+      rerpPhases: spec.datatype === 'rerp' ? glmTypePredictors(metadata, spec.rerpType) : [],
+      rerpPhaseLabels: glmPhaseLabels(metadata),
       // Always expose both axes; condition-overlap is disabled (not hidden) when the
       // datatype has no condition dimension (condition-diff).
       axes: ['phase', 'condition'],
@@ -342,6 +350,27 @@ export default function usePhaseOverlapData() {
         const dphases = diffTypesMeta[next.diffType]?.phases;
         if (Array.isArray(dphases) && dphases.length && !dphases.includes(next.fixedPhase)) {
           next.fixedPhase = dphases[0];
+        }
+      }
+      if (next.datatype === 'rerp') {
+        // GLM's Venn is over the three tasks (conditions); a fixed phase (predictor)
+        // supplies the per-task significance. Time courses still show every phase of the
+        // type as columns. fixedPhase here lives in the GLM predictor namespace.
+        const types = glmAvailableTypes(metadata);
+        if (!next.rerpType || !types.includes(next.rerpType)) {
+          next.rerpType = glmDefaultType(metadata);
+        }
+        next.axis = 'condition';
+        const preds = glmTypePredictors(metadata, next.rerpType);
+        if (!preds.includes(next.fixedPhase)) next.fixedPhase = preds[0] ?? null;
+      } else {
+        // Leaving GLM: fixedPhase may hold a GLM predictor, which is invalid in the
+        // manifest-phase namespace — reconcile it so the next fetch can't 404.
+        const phaseNS = next.datatype === 'diff'
+          ? (diffTypesMeta[next.diffType]?.phases ?? metadata?.phases ?? [])
+          : (metadata?.phases ?? []);
+        if (phaseNS.length && !phaseNS.includes(next.fixedPhase)) {
+          next.fixedPhase = phaseNS[0];
         }
       }
       if (!datatypeHasCondition(next.datatype, next.diffType)) {

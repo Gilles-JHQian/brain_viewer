@@ -156,11 +156,33 @@ def _phase_time_ranges(data_dir, references, conditions, phases):
     return ranges
 
 
+def _rerp_time_ranges(data_dir, references, conditions, predictors):
+    """Read the actual {min,max} time window per RERP predictor from the first
+    available rerp file (each predictor is its own event-locked window, so this
+    drives the panel x-axis without colliding with the phase keys)."""
+    ranges = {}
+    for predictor in predictors:
+        for ref in references:
+            for cond in conditions:
+                fp = os.path.join(data_dir, ref, "rerp", f"{predictor}_{cond}.json")
+                if os.path.isfile(fp):
+                    times = json.load(open(fp)).get("times") or []
+                    if times:
+                        ranges[predictor] = {"min": float(times[0]), "max": float(times[-1])}
+                    break
+            if predictor in ranges:
+                break
+    return ranges
+
+
 def build_manifest(data_dir, references, conditions, diff_types, phases,
-                   brain_meta, mesh_rel="assets/brain_fsaverage.glb"):
+                   brain_meta, rerp_config=None, mesh_rel="assets/brain_fsaverage.glb"):
     """Enumerate every available (ref x datatype x ...) variant -> per-phase files."""
     variants = {}
     subjects, rois = set(), set()
+    rerp_config = rerp_config or {}
+    rerp_predictors = rerp_config.get("predictors", [])
+    rerp_labels = rerp_config.get("labels", {})
 
     for ref in references:
         ref_dir = os.path.join(data_dir, ref)
@@ -206,6 +228,24 @@ def build_manifest(data_dir, references, conditions, diff_types, phases,
                         "phaseFiles": phase_files,
                     }
 
+        # --- rerp variants: ref|rerp|<predictor>|<condition> ---
+        # A RERP kernel has no phase axis; the predictor occupies the phase-file slot
+        # (single-entry phaseFiles keyed by the predictor). Sparse predictor x condition
+        # combos are skipped by the same _exists gate as diffs.
+        for predictor in rerp_predictors:
+            for cond in conditions:
+                fname = f"{predictor}_{cond}.json"
+                if not _exists(ref_dir, "rerp", fname):
+                    continue
+                variants[_variant_key(ref, "rerp", predictor, cond)] = {
+                    "reference": ref, "datatype": "rerp",
+                    "rerp_predictor": predictor, "condition": cond,
+                    "phaseFiles": {predictor: f"{ref}/rerp/{fname}"},
+                }
+
+    has_rerp = any(v["datatype"] == "rerp" for v in variants.values())
+    datatypes = ["zscore", "diff"] + (["rerp"] if has_rerp else [])
+
     default_variant = _variant_key(references[0], "zscore", conditions[0])
     if default_variant not in variants and variants:
         default_variant = next(iter(variants))
@@ -218,9 +258,12 @@ def build_manifest(data_dir, references, conditions, diff_types, phases,
             "phase_time_ranges": _phase_time_ranges(data_dir, references, conditions, phases),
             "default_venn_phases": [p for p in DEFAULT_VENN_PHASES if p in phases],
             "references": references,
-            "datatypes": ["zscore", "diff"],
+            "datatypes": datatypes,
             "conditions": conditions,
             "diff_types": diff_types,
+            "rerp_predictors": rerp_predictors,
+            "rerp_labels": rerp_labels,
+            "rerp_time_ranges": _rerp_time_ranges(data_dir, references, conditions, rerp_predictors),
             "subjects": sorted(subjects),
             "rois": sorted(rois),
             "coordinate_space": brain_meta.get("coordinate_space"),
@@ -255,13 +298,14 @@ def main():
     references = cfg.get("references", ["car", "bipolar"])
     conditions = cfg.get("conditions", ["Decision", "Passive", "Repeat"])
     diff_types = cfg.get("diff_types", {})
+    rerp_config = cfg.get("rerp", {})
 
     print("Building brain GLB ...")
     brain_meta = build_brain_glb(args.data_dir, args.assets_dir)
 
     print("Building manifest ...")
     manifest = build_manifest(args.data_dir, references, conditions, diff_types,
-                              args.phases, brain_meta)
+                              args.phases, brain_meta, rerp_config=rerp_config)
     os.makedirs(os.path.dirname(args.manifest), exist_ok=True)
     with open(args.manifest, "w") as fh:
         json.dump(manifest, fh)

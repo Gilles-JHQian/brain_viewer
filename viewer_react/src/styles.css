@@ -193,6 +193,17 @@ h1 {
   margin-right: 2px;
 }
 
+.venn-unavailable {
+  padding: 16px 12px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+  background: #f8fafc;
+  border: 1px dashed #dbe4ef;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
 .load-chip {
   border: 1px solid #dbe4ef;
   background: #ffffff;

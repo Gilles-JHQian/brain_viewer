@@ -7,6 +7,7 @@ import {
 } from './phases.js';
 import { PHASE_TIME_RANGES } from './loads.js';
 import { VENN_MAX_PHASES } from './venn.js';
+import { glmTypePredictors, glmPhaseLabels } from './glm.js';
 
 function titleCase(value) {
   const s = String(value);
@@ -28,8 +29,32 @@ function replaceObject(target, next) {
 //   axis='phase'     -> members = phases,     per-phase time windows
 //   axis='condition' -> members = conditions, all sharing the fixed phase's time window
 // The members become the columns of the Venn AND the bottom waveform strip.
-export function vennAxisConfig(metadata, axis, fixedPhase) {
+export function vennAxisConfig(metadata, axis, fixedPhase, spec = null) {
   const ranges = metadata?.phase_time_ranges || {};
+  // GLM: the Venn is over the three tasks (conditions), all sharing the fixed phase's
+  // (predictor's) event-locked window. A phase-axis fallback keeps the predictor members
+  // for completeness.
+  if (spec?.datatype === 'rerp') {
+    const rerpRanges = metadata?.rerp_time_ranges || {};
+    if (spec.axis === 'condition') {
+      const members = metadata?.conditions || [];
+      const range = rerpRanges[spec.fixedPhase] || { min: -1, max: 2 };
+      return {
+        axis: 'condition',
+        members,
+        labels: Object.fromEntries(members.map((m) => [m, m])),
+        timeRanges: Object.fromEntries(members.map((m) => [m, range])),
+      };
+    }
+    const members = glmTypePredictors(metadata, spec.rerpType);
+    const phaseLabels = glmPhaseLabels(metadata);
+    return {
+      axis: 'phase',
+      members,
+      labels: Object.fromEntries(members.map((m) => [m, phaseLabels[m] ?? m])),
+      timeRanges: Object.fromEntries(members.map((m) => [m, rerpRanges[m] ?? { min: -1, max: 2 }])),
+    };
+  }
   if (axis === 'condition') {
     const members = metadata?.conditions || [];
     const range = ranges[fixedPhase] || { min: -1, max: 2 };

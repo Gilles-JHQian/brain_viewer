@@ -18,6 +18,7 @@ import { phaseColor } from './constants/colors.js';
 import useOnboardingTour from './hooks/useOnboardingTour.js';
 import PanelTitle from './components/layout/PanelTitle.jsx';
 import VennPanel from './components/venn/VennPanel.jsx';
+import SubjectFilterSection from './components/venn/SubjectFilterSection.jsx';
 import BrainViewer from './components/brain/BrainViewer.jsx';
 import DetailPanel from './components/detail/DetailPanel.jsx';
 import WaveformPanel from './components/waveform/WaveformPanel.jsx';
@@ -28,6 +29,7 @@ import TopLoadBar from './components/layout/TopLoadBar.jsx';
 import { ANIM_WINDOW_SEC } from './constants/animation.js';
 import { KDE_BANDWIDTH, KDE_MAX_DISTANCE } from './brainKde.js';
 import { getSelectionEmptyState } from './utils/selectionEmptyState.js';
+import { glmPhaseLabels } from './constants/glm.js';
 
 export default function App() {
   // brain_viewer has no Sternberg "load" axis; downstream components still take a
@@ -112,6 +114,17 @@ export default function App() {
     updateVariant,
   } = usePhaseOverlapData();
 
+  // GLM significance exists only for some predictors (the lexicality regressors).
+  // When the active GLM variant has no significant electrodes, fall back to showing
+  // all electrodes with the Venn disabled; when it does, it behaves like a normal
+  // significance-driven category (Venn over conditions + mask highlighting).
+  // Compute over the full electrode set (not subject-filtered): whether a predictor
+  // has significance is a property of the variant, so deselecting all subjects must
+  // not flip this flag and hide the subject selector inside the Venn panel.
+  const isRerpView = spec?.datatype === 'rerp';
+  const rerpNoSig = isRerpView
+    && ![...electrodeById.values()].some((e) => (e.active_phases?.length ?? 0) > 0);
+
   const {
     vennPhases,
     setVennPhases,
@@ -135,7 +148,12 @@ export default function App() {
     tableElectrodes,
     tableElectrodesKey,
     roiBarItems,
-  } = useSelectionPipeline({ subjectFilteredElectrodes, electrodeById, vennMembers });
+  } = useSelectionPipeline({
+    subjectFilteredElectrodes,
+    electrodeById,
+    vennMembers,
+    bypassVenn: rerpNoSig,
+  });
 
   // Full phase x condition grid for the active spec — powers the fixed time-course panel
   // (all conditions overlaid per phase) and the brain-map condition slice.
@@ -190,9 +208,17 @@ export default function App() {
   }, [gridPhasesKey]);
 
   // Per-panel-phase time-course bounds (real-phase-keyed; user overrides, else defaults).
+  // GLM "phases" are predictors with their own event-locked windows (and no fixed
+  // defaults), so use the manifest's per-predictor time ranges when in GLM mode.
+  const rerpTimeRanges = data?.metadata?.rerp_time_ranges ?? {};
   const panelPhaseBounds = useMemo(() => Object.fromEntries(
-    activePanelPhases.map((phase) => [phase, phaseBounds[phase] ?? defaultPhaseBounds(phase)]),
-  ), [activePanelPhases, phaseBounds]);
+    activePanelPhases.map((phase) => [
+      phase,
+      phaseBounds[phase]
+        ?? (isRerpView ? rerpTimeRanges[phase] : undefined)
+        ?? defaultPhaseBounds(phase),
+    ]),
+  ), [activePanelPhases, phaseBounds, isRerpView, rerpTimeRanges]);
 
   // Re-slice the grid at the map's condition into the traces[id][phase].all shape the
   // animation + electrode-HGA code consume.
@@ -267,6 +293,7 @@ export default function App() {
       availableRoiCount: availableRois.length,
       enabledRoiCount,
       visibleElectrodeCount: tableElectrodes.length,
+      bypassVenn: rerpNoSig,
     }),
     [
       selectedSubjects.size,
@@ -274,6 +301,7 @@ export default function App() {
       availableRois.length,
       enabledRoiCount,
       tableElectrodes.length,
+      rerpNoSig,
     ],
   );
 
@@ -370,7 +398,9 @@ export default function App() {
         <aside className="panel venn-panel">
           <PanelTitle
             icon={<Activity size={18} />}
-            title={`${spec?.axis === 'condition' ? 'Condition' : 'Phase'} overlap selector`}
+            title={rerpNoSig
+              ? 'GLM electrode selector'
+              : `${spec?.axis === 'condition' ? 'Condition' : 'Phase'} overlap selector`}
           />
           <VariantSelector
             spec={spec}
@@ -378,40 +408,67 @@ export default function App() {
             loading={variantLoading}
             onChange={updateVariant}
             showReference={showReferenceSelector}
-            showVennOver={showVennOverSelector}
+            showVennOver={showVennOverSelector && !rerpNoSig}
+            showRerpPhase={!rerpNoSig}
           />
-          <VennPanel
-            vennPhases={vennPhases}
-            regions={vennRegions}
-            availableSubjects={availableSubjects}
-            selectedSubjects={selectedSubjects}
-            onToggleSubject={(subject) => {
-              toggleSubject(subject);
-              clearSelectedElectrode();
-            }}
-            onSelectAllSubjects={() => {
-              selectAllSubjects();
-              clearSelectedElectrode();
-            }}
-            onDeselectAllSubjects={() => {
-              deselectAllSubjects();
-              clearSelectedElectrode();
-            }}
-            selectedRegionIds={selectedRegionIds}
-            onTogglePhase={(phase) => {
-              setVennPhases((current) => {
-                if (current.includes(phase)) {
-                  if (current.length <= VENN_MIN_PHASES) return current;
-                  return current.filter((item) => item !== phase);
-                }
-                if (current.length >= VENN_MAX_PHASES) return current;
-                return PHASES.filter((item) => current.includes(item) || item === phase);
-              });
-            }}
-            onSelect={(id) => {
-              selectRegion(id);
-            }}
-          />
+          {rerpNoSig ? (
+            <>
+              <div className="venn-unavailable">
+                Average response has no significance grouping. All selected electrodes are
+                shown on the map and averaged in the time courses below.
+              </div>
+              <SubjectFilterSection
+                availableSubjects={availableSubjects}
+                selectedSubjects={selectedSubjects}
+                onToggleSubject={(subject) => {
+                  toggleSubject(subject);
+                  clearSelectedElectrode();
+                }}
+                onSelectAllSubjects={() => {
+                  selectAllSubjects();
+                  clearSelectedElectrode();
+                }}
+                onDeselectAllSubjects={() => {
+                  deselectAllSubjects();
+                  clearSelectedElectrode();
+                }}
+                hint="Filter subjects for the brain map and averaged time courses."
+              />
+            </>
+          ) : (
+            <VennPanel
+              vennPhases={vennPhases}
+              regions={vennRegions}
+              availableSubjects={availableSubjects}
+              selectedSubjects={selectedSubjects}
+              onToggleSubject={(subject) => {
+                toggleSubject(subject);
+                clearSelectedElectrode();
+              }}
+              onSelectAllSubjects={() => {
+                selectAllSubjects();
+                clearSelectedElectrode();
+              }}
+              onDeselectAllSubjects={() => {
+                deselectAllSubjects();
+                clearSelectedElectrode();
+              }}
+              selectedRegionIds={selectedRegionIds}
+              onTogglePhase={(phase) => {
+                setVennPhases((current) => {
+                  if (current.includes(phase)) {
+                    if (current.length <= VENN_MIN_PHASES) return current;
+                    return current.filter((item) => item !== phase);
+                  }
+                  if (current.length >= VENN_MAX_PHASES) return current;
+                  return PHASES.filter((item) => current.includes(item) || item === phase);
+                });
+              }}
+              onSelect={(id) => {
+                selectRegion(id);
+              }}
+            />
+          )}
         </aside>
 
         <section className="panel brain-panel">
@@ -498,7 +555,10 @@ export default function App() {
           gridLoading={gridLoading}
           panelPhases={activePanelPhases}
           availablePhases={gridPhases}
-          phaseLabels={data.metadata?.phase_labels ?? {}}
+          phaseLabels={spec?.datatype === 'rerp'
+            ? glmPhaseLabels(data.metadata)
+            : (data.metadata?.phase_labels ?? {})}
+          gate={!rerpNoSig}
           onTogglePanelPhase={togglePanelPhase}
           overlayIsDiff={spec?.datatype === 'diff'}
           expandable={spec?.datatype === 'diff' && gridHasCondition}
