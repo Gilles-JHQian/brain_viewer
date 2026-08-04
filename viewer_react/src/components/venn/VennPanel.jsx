@@ -4,7 +4,7 @@ import { VENN_MAX_PHASES, VENN_MIN_PHASES } from '../../constants/venn.js';
 import { phaseColor, regionHitStyle } from '../../constants/colors.js';
 import { buildVennConfig } from '../../utils/vennLayout.js';
 import VennDefs from './VennDefs.jsx';
-import SubjectDropdown from './SubjectDropdown.jsx';
+import SubjectFilterSection from './SubjectFilterSection.jsx';
 
 export default function VennPanel({
   vennPhases,
@@ -119,21 +119,13 @@ export default function VennPanel({
       <div className="venn-instruction">Click Venn components to toggle; highlighted electrodes are the union of selected components.</div>
       </div>
 
-      {availableSubjects.length > 0 && (
-        <div className="venn-subject-section" data-tour="subject-filter">
-          <div className="venn-subject-section-title">Subject filter</div>
-          <SubjectDropdown
-            availableSubjects={availableSubjects}
-            selectedSubjects={selectedSubjects}
-            onToggleSubject={onToggleSubject}
-            onSelectAllSubjects={onSelectAllSubjects}
-            onDeselectAllSubjects={onDeselectAllSubjects}
-          />
-          <div className="venn-subject-hint">
-            Filter subjects for Venn counts, brain map, and waveforms.
-          </div>
-        </div>
-      )}
+      <SubjectFilterSection
+        availableSubjects={availableSubjects}
+        selectedSubjects={selectedSubjects}
+        onToggleSubject={onToggleSubject}
+        onSelectAllSubjects={onSelectAllSubjects}
+        onDeselectAllSubjects={onDeselectAllSubjects}
+      />
     </div>
   );
 }

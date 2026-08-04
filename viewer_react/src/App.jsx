@@ -18,6 +18,7 @@ import { phaseColor } from './constants/colors.js';
 import useOnboardingTour from './hooks/useOnboardingTour.js';
 import PanelTitle from './components/layout/PanelTitle.jsx';
 import VennPanel from './components/venn/VennPanel.jsx';
+import SubjectFilterSection from './components/venn/SubjectFilterSection.jsx';
 import BrainViewer from './components/brain/BrainViewer.jsx';
 import DetailPanel from './components/detail/DetailPanel.jsx';
 import WaveformPanel from './components/waveform/WaveformPanel.jsx';
@@ -117,9 +118,12 @@ export default function App() {
   // When the active GLM variant has no significant electrodes, fall back to showing
   // all electrodes with the Venn disabled; when it does, it behaves like a normal
   // significance-driven category (Venn over conditions + mask highlighting).
+  // Compute over the full electrode set (not subject-filtered): whether a predictor
+  // has significance is a property of the variant, so deselecting all subjects must
+  // not flip this flag and hide the subject selector inside the Venn panel.
   const isRerpView = spec?.datatype === 'rerp';
   const rerpNoSig = isRerpView
-    && !subjectFilteredElectrodes.some((e) => (e.active_phases?.length ?? 0) > 0);
+    && ![...electrodeById.values()].some((e) => (e.active_phases?.length ?? 0) > 0);
 
   const {
     vennPhases,
@@ -289,6 +293,7 @@ export default function App() {
       availableRoiCount: availableRois.length,
       enabledRoiCount,
       visibleElectrodeCount: tableElectrodes.length,
+      bypassVenn: rerpNoSig,
     }),
     [
       selectedSubjects.size,
@@ -296,6 +301,7 @@ export default function App() {
       availableRois.length,
       enabledRoiCount,
       tableElectrodes.length,
+      rerpNoSig,
     ],
   );
 
@@ -406,10 +412,29 @@ export default function App() {
             showRerpPhase={!rerpNoSig}
           />
           {rerpNoSig ? (
-            <div className="venn-unavailable">
-              Venn overlap is unavailable for this RERP predictor (no significance
-              statistics). All electrodes are shown.
-            </div>
+            <>
+              <div className="venn-unavailable">
+                Average response has no significance grouping. All selected electrodes are
+                shown on the map and averaged in the time courses below.
+              </div>
+              <SubjectFilterSection
+                availableSubjects={availableSubjects}
+                selectedSubjects={selectedSubjects}
+                onToggleSubject={(subject) => {
+                  toggleSubject(subject);
+                  clearSelectedElectrode();
+                }}
+                onSelectAllSubjects={() => {
+                  selectAllSubjects();
+                  clearSelectedElectrode();
+                }}
+                onDeselectAllSubjects={() => {
+                  deselectAllSubjects();
+                  clearSelectedElectrode();
+                }}
+                hint="Filter subjects for the brain map and averaged time courses."
+              />
+            </>
           ) : (
             <VennPanel
               vennPhases={vennPhases}
@@ -533,6 +558,7 @@ export default function App() {
           phaseLabels={spec?.datatype === 'rerp'
             ? glmPhaseLabels(data.metadata)
             : (data.metadata?.phase_labels ?? {})}
+          gate={!rerpNoSig}
           onTogglePanelPhase={togglePanelPhase}
           overlayIsDiff={spec?.datatype === 'diff'}
           expandable={spec?.datatype === 'diff' && gridHasCondition}
