@@ -14,6 +14,10 @@ import PanelEmptyState from '../layout/PanelEmptyState.jsx';
 // The bottom trace shows a little context beyond the (animation) bounds front and back.
 const TRACE_BOUNDS_MARGIN_SEC = 0.1;
 
+// Cap each phase column's width so that a small number of phases (e.g. GLM lexicality's
+// two) don't stretch across the whole panel and read as awkwardly wide.
+const MAX_PHASE_COLUMN_PX = 520;
+
 // Selectable playback speed multipliers for the time-course animation.
 const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2];
 
@@ -351,7 +355,10 @@ function WaveformPanel({
         )}
         <div
           className={`waveform-grid${selectionEmpty ? ' is-empty' : ''}`}
-          style={{ gridTemplateColumns: panelPhases.map(() => '1fr').join(' ') }}
+          style={{
+            gridTemplateColumns: panelPhases.map(() => 'minmax(0, 1fr)').join(' '),
+            maxWidth: `${panelPhases.length * MAX_PHASE_COLUMN_PX}px`,
+          }}
         >
           {panelPhases.map((phase) => (
             <PhasePlotCard
