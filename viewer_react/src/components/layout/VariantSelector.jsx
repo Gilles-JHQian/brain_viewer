@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Database, Layers, GitCompare, Activity, Shuffle, Loader2,
 } from 'lucide-react';
+import { glmTypeLabel } from '../../constants/glm.js';
 
 function ChipGroup({
   icon, label, options, value, onSelect, formatLabel, disabled = [], disabledTitle,
@@ -34,20 +35,20 @@ function ChipGroup({
 // phases (fixed condition) or conditions (fixed phase).
 export default function VariantSelector({
   spec, options, loading, onChange, showReference = true, showVennOver = true,
+  showRerpPhase = true,
 }) {
   if (!spec || !options) return null;
 
   const {
     references, datatypes, conditions, phases, diffTypes, diffTypesMeta, axes,
-    conditionAxisDisabled, rerpPredictors = [], rerpLabels = {},
+    conditionAxisDisabled, rerpTypes = [], rerpPhases = [], rerpPhaseLabels = {},
   } = options;
   const isDiff = spec.datatype === 'diff';
   const isRerp = spec.datatype === 'rerp';
   const directions = isDiff ? (diffTypesMeta?.[spec.diffType]?.directions ?? []) : [];
   const hasCondition = !isDiff || !!diffTypesMeta?.[spec.diffType]?.needs_condition;
 
-  const datatypeLabel = (dt) => ({ zscore: 'Z-score', diff: 'Difference', rerp: 'RERP' }[dt] ?? dt);
-  const rerpPredictorLabel = (p) => (rerpLabels?.[p] ?? p);
+  const datatypeLabel = (dt) => ({ zscore: 'Z-score', diff: 'Difference', rerp: 'GLM' }[dt] ?? dt);
   const axisLabel = (a) => (a === 'condition' ? 'Condition' : 'Phase');
   // Human-readable diff-type chip labels; unknown types fall back to the raw key.
   const diffTypeLabel = (dt) => ({
@@ -100,13 +101,27 @@ export default function VariantSelector({
         <ChipGroup
           icon={<GitCompare size={14} />}
           label="Predictor"
-          options={rerpPredictors}
-          value={spec.rerpPredictor}
-          onSelect={(rerpPredictor) => onChange({ rerpPredictor })}
-          formatLabel={rerpPredictorLabel}
+          options={rerpTypes}
+          value={spec.rerpType}
+          onSelect={(rerpType) => onChange({ rerpType })}
+          formatLabel={glmTypeLabel}
         />
       )}
-      {showVennOver && axes?.length > 1 && (
+      {/* GLM phase picks which phase's significance defines the per-task Venn. Only shown
+          when the type is significance-driven (lexicality); average has no Venn. */}
+      {isRerp && showRerpPhase && rerpPhases.length > 1 && (
+        <ChipGroup
+          icon={<Activity size={14} />}
+          label="Phase"
+          options={rerpPhases}
+          value={spec.fixedPhase}
+          onSelect={(fixedPhase) => onChange({ fixedPhase })}
+          formatLabel={(p) => (rerpPhaseLabels?.[p] ?? p)}
+        />
+      )}
+      {/* GLM's phase axis = the type's predictors (shown as time-course columns / Venn
+          circles), so the "Venn over" toggle is hidden — only the fixed Condition applies. */}
+      {showVennOver && !isRerp && axes?.length > 1 && (
         <ChipGroup
           icon={<Shuffle size={14} />}
           label="Venn over"
@@ -114,14 +129,11 @@ export default function VariantSelector({
           value={spec.axis}
           onSelect={(axis) => onChange({ axis })}
           formatLabel={axisLabel}
-          disabled={isRerp ? ['phase'] : (conditionAxisDisabled ? ['condition'] : [])}
-          disabledTitle={isRerp
-            ? 'RERP has no phase axis'
-            : 'This difference is already over conditions'}
+          disabled={conditionAxisDisabled ? ['condition'] : []}
+          disabledTitle="This difference is already over conditions"
         />
       )}
-      {/* The fixed dimension is the one the Venn is NOT iterating over. RERP replaces
-          the phase axis with the Predictor dropdown above, so no Phase chip here. */}
+      {/* The fixed dimension is the one the Venn is NOT iterating over. */}
       {spec.axis === 'condition' && !isRerp && (
         <ChipGroup
           icon={<Activity size={14} />}
@@ -131,7 +143,9 @@ export default function VariantSelector({
           onSelect={(fixedPhase) => onChange({ fixedPhase })}
         />
       )}
-      {spec.axis === 'phase' && hasCondition && (
+      {/* GLM fixes the condition to the brain panel's Map-condition picker, so no Condition
+          chip here; other phase-axis datatypes still choose their fixed condition. */}
+      {spec.axis === 'phase' && hasCondition && !isRerp && (
         <ChipGroup
           icon={<Activity size={14} />}
           label="Condition"

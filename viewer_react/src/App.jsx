@@ -28,6 +28,7 @@ import TopLoadBar from './components/layout/TopLoadBar.jsx';
 import { ANIM_WINDOW_SEC } from './constants/animation.js';
 import { KDE_BANDWIDTH, KDE_MAX_DISTANCE } from './brainKde.js';
 import { getSelectionEmptyState } from './utils/selectionEmptyState.js';
+import { glmPhaseLabels } from './constants/glm.js';
 
 export default function App() {
   // brain_viewer has no Sternberg "load" axis; downstream components still take a
@@ -112,8 +113,8 @@ export default function App() {
     updateVariant,
   } = usePhaseOverlapData();
 
-  // RERP significance exists only for some predictors (the lexicality regressors).
-  // When the active RERP variant has no significant electrodes, fall back to showing
+  // GLM significance exists only for some predictors (the lexicality regressors).
+  // When the active GLM variant has no significant electrodes, fall back to showing
   // all electrodes with the Venn disabled; when it does, it behaves like a normal
   // significance-driven category (Venn over conditions + mask highlighting).
   const isRerpView = spec?.datatype === 'rerp';
@@ -203,8 +204,8 @@ export default function App() {
   }, [gridPhasesKey]);
 
   // Per-panel-phase time-course bounds (real-phase-keyed; user overrides, else defaults).
-  // RERP "phases" are predictors with their own event-locked windows (and no fixed
-  // defaults), so use the manifest's per-predictor time ranges when in RERP mode.
+  // GLM "phases" are predictors with their own event-locked windows (and no fixed
+  // defaults), so use the manifest's per-predictor time ranges when in GLM mode.
   const rerpTimeRanges = data?.metadata?.rerp_time_ranges ?? {};
   const panelPhaseBounds = useMemo(() => Object.fromEntries(
     activePanelPhases.map((phase) => [
@@ -392,7 +393,7 @@ export default function App() {
           <PanelTitle
             icon={<Activity size={18} />}
             title={rerpNoSig
-              ? 'RERP electrode selector'
+              ? 'GLM electrode selector'
               : `${spec?.axis === 'condition' ? 'Condition' : 'Phase'} overlap selector`}
           />
           <VariantSelector
@@ -402,6 +403,7 @@ export default function App() {
             onChange={updateVariant}
             showReference={showReferenceSelector}
             showVennOver={showVennOverSelector && !rerpNoSig}
+            showRerpPhase={!rerpNoSig}
           />
           {rerpNoSig ? (
             <div className="venn-unavailable">
@@ -529,7 +531,7 @@ export default function App() {
           panelPhases={activePanelPhases}
           availablePhases={gridPhases}
           phaseLabels={spec?.datatype === 'rerp'
-            ? (data.metadata?.rerp_labels ?? {})
+            ? glmPhaseLabels(data.metadata)
             : (data.metadata?.phase_labels ?? {})}
           onTogglePanelPhase={togglePanelPhase}
           overlayIsDiff={spec?.datatype === 'diff'}

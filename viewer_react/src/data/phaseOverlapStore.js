@@ -1,6 +1,7 @@
 import { applyPhaseConfig, applyVennAxisConfig, vennAxisConfig } from '../constants/phaseConfig.js';
 import { attachPhaseFlags } from '../utils/phaseFlags.js';
 import { attachElectrodeHga } from '../utils/electrodeHga.js';
+import { glmTypePredictors, glmDefaultType } from '../constants/glm.js';
 
 const TRACE_CACHE_MAX = 48;
 
@@ -106,7 +107,7 @@ async function loadReferenceElectrodes(manifest, reference) {
 // (axis='condition'); the other dimension is taken from the spec's fixed value.
 export function resolveVariantFile(spec, member, diffMeta) {
   const {
-    reference, datatype, diffType, direction, rerpPredictor, axis, fixedPhase, fixedCondition,
+    reference, datatype, diffType, direction, axis, fixedPhase, fixedCondition,
   } = spec;
   const phase = axis === 'condition' ? fixedPhase : member;
   const condition = axis === 'condition' ? member : fixedCondition;
@@ -114,8 +115,8 @@ export function resolveVariantFile(spec, member, diffMeta) {
     return `${reference}/zscore/${phase}_${condition}.json`;
   }
   if (datatype === 'rerp') {
-    // RERP has no phase axis; the predictor occupies the phase-file slot.
-    return `${reference}/rerp/${rerpPredictor}_${condition}.json`;
+    // GLM iterates predictors over the phase axis; the resolved `phase` IS the predictor key.
+    return `${reference}/rerp/${phase}_${condition}.json`;
   }
   const needsCond = diffMeta?.[diffType]?.needs_condition;
   const suffix = needsCond && condition ? `_${condition}` : '';
@@ -195,9 +196,15 @@ function buildVariantTraces(phasePayloads, phases, labels = null) {
 // lexicality omits the pre-stimulus Cue), so restrict phase-axis members to that
 // subset when present — otherwise the omitted phase shows up as an empty member.
 export function specMembers(metadata, spec) {
+  // GLM's Venn is over the three tasks (conditions); the fixed phase (predictor) supplies
+  // each task circle's significance. (Time-course columns come from gridAxesForSpec, not
+  // these members.)
+  if (spec.datatype === 'rerp') {
+    return spec.axis === 'condition'
+      ? (metadata.conditions || [])
+      : glmTypePredictors(metadata, spec.rerpType);
+  }
   if (spec.axis === 'condition') return metadata.conditions || [];
-  // RERP has no phase axis; the sole phase-member is the selected predictor.
-  if (spec.datatype === 'rerp') return spec.rerpPredictor ? [spec.rerpPredictor] : [];
   const phases = metadata.phases || [];
   if (spec.datatype === 'diff') {
     const diffPhases = metadata.diff_types?.[spec.diffType]?.phases;
@@ -216,7 +223,7 @@ export function defaultVariantSpec(metadata) {
     datatype: 'zscore',
     diffType: null,
     direction: null,
-    rerpPredictor: null,
+    rerpType: glmDefaultType(metadata),
     axis: 'condition',
     fixedPhase: (metadata.phases || [])[0] ?? null,
     fixedCondition: (metadata.conditions || [])[0] ?? null,
@@ -252,10 +259,11 @@ export async function loadVariant(manifest, spec) {
 // it collapses to a single synthetic member -> one line/phase.
 export function gridAxesForSpec(metadata, spec) {
   const diffMeta = metadata?.diff_types || {};
-  // RERP: one "phase" row = the selected predictor; grid iterates over conditions.
+  // GLM: the phase axis = the selected type's predictors (time-course columns); the grid
+  // iterates those predictors over conditions.
   if (spec?.datatype === 'rerp') {
     return {
-      phases: spec.rerpPredictor ? [spec.rerpPredictor] : [],
+      phases: glmTypePredictors(metadata, spec.rerpType),
       conditions: metadata?.conditions || [],
       hasCondition: true,
     };
@@ -383,7 +391,7 @@ export async function loadViewerBootstrap({ onProgress, dataBase } = {}) {
     // brain_viewer variant layout: derive member flags + traces for the default spec.
     if (manifest.layout === 'variant') {
       const spec = defaultVariantSpec(manifest.metadata);
-      applyVennAxisConfig(vennAxisConfig(manifest.metadata, spec.axis, spec.fixedPhase));
+      applyVennAxisConfig(vennAxisConfig(manifest.metadata, spec.axis, spec.fixedPhase, spec));
       const { electrodes, traces, hgaScale, members } = await loadVariant(manifest, spec);
       reportBootstrap('electrodes', 2);
       return {

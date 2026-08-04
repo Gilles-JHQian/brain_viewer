@@ -54,7 +54,7 @@ export default function useSelectionPipeline({
     return ids;
   }, [selectedRegions]);
 
-  // RERP has no significance statistics, so the Venn selection is empty and would hide
+  // GLM has no significance statistics, so the Venn selection is empty and would hide
   // every electrode. When bypassVenn is set we skip the Venn gate and take all electrodes
   // (ROI filtering below still applies).
   const vennSelectedElectrodes = useMemo(
