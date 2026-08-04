@@ -1,8 +1,8 @@
 {
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "vite --host ::",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0",
+    "preview": "vite preview --host ::",
     "qa-data": "python scripts/qa_export.py public/data"
   },
   "dependencies": {
